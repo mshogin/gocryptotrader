@@ -142,7 +142,7 @@ Binaries will be published once the codebase reaches a stable condition.
 
 |User|Github|Contribution Amount|
 |--|--|--|
-| thrasher- | https://github.com/idoall | 526 |
+| thrasher- | https://github.com/thrasher- | 526 |
 | shazbert | https://github.com/shazbert | 166 |
 | gloriousCode | https://github.com/gloriousCode | 146 |
 | ermalguni | https://github.com/ermalguni | 14 |
