@@ -3,9 +3,9 @@ package alphapoint
 import (
 	"testing"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/currency"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/currency"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
 )
 
 const (

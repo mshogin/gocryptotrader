@@ -3,7 +3,7 @@ package currencylayer
 import (
 	"testing"
 
-	"github.com/idoall/gocryptotrader/currency/forexprovider/base"
+	"github.com/thrasher-/gocryptotrader/currency/forexprovider/base"
 )
 
 var c CurrencyLayer

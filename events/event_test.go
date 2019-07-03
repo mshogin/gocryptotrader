@@ -4,10 +4,10 @@ package events
 // import (
 // 	"testing"
 //
-// 	"github.com/idoall/gocryptotrader/config"
-// 	"github.com/idoall/gocryptotrader/currency/pair"
-// 	"github.com/idoall/gocryptotrader/exchanges/ticker"
-// 	"github.com/idoall/gocryptotrader/smsglobal"
+// 	"github.com/thrasher-/gocryptotrader/config"
+// 	"github.com/thrasher-/gocryptotrader/currency/pair"
+// 	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
+// 	"github.com/thrasher-/gocryptotrader/smsglobal"
 // )
 //
 // var (

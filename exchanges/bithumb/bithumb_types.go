@@ -1,6 +1,6 @@
 package bithumb
 
-import "github.com/idoall/gocryptotrader/currency"
+import "github.com/thrasher-/gocryptotrader/currency"
 
 // Ticker holds ticker data
 type Ticker struct {

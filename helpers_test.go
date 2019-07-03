@@ -3,13 +3,13 @@ package main
 import (
 	"testing"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/currency"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
-	"github.com/idoall/gocryptotrader/exchanges/stats"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/currency"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/exchanges/stats"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
 )
 
 const (

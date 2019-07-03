@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoall/TokenExchangeCommon/commonutils"
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/currency"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
+	"github.com/thrasher-/TokenExchangeCommon/commonutils"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/currency"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
 	"github.com/thrasher-/gocryptotrader/exchanges/binance"
 )
 

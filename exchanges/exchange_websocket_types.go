@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/idoall/gocryptotrader/currency"
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
 )
 
 // Websocket functionality list and state consts

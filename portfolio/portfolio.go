@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/currency"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/currency"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 const (

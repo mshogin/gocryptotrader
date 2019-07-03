@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/currency/coinmarketcap"
-	"github.com/idoall/gocryptotrader/currency/forexprovider"
-	"github.com/idoall/gocryptotrader/currency/forexprovider/base"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/currency/coinmarketcap"
+	"github.com/thrasher-/gocryptotrader/currency/forexprovider"
+	"github.com/thrasher-/gocryptotrader/currency/forexprovider/base"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 // CurrencyFileUpdateDelay defines the rate at which the currency.json file is

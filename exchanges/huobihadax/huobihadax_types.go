@@ -1,7 +1,7 @@
 package huobihadax
 
 import (
-	"github.com/idoall/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/currency"
 )
 
 // Response stores the Huobi response information

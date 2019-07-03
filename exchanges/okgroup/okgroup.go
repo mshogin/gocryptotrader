@@ -15,10 +15,10 @@ import (
 
 	"github.com/google/go-querystring/query"
 	"github.com/gorilla/websocket"
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/config"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/config"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 const (

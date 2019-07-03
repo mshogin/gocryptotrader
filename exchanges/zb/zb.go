@@ -11,15 +11,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/idoall/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/currency"
 
 	"github.com/gorilla/websocket"
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/config"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
-	"github.com/idoall/gocryptotrader/exchanges/request"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/config"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
+	"github.com/thrasher-/gocryptotrader/exchanges/request"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 const (

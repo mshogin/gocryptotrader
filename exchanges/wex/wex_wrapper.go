@@ -5,10 +5,10 @@ import (
 	"log"
 	"sync"
 
-	"github.com/idoall/gocryptotrader/common"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
+	"github.com/thrasher-/gocryptotrader/common"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
 )
 
 // Start starts the WEX go routine

@@ -3,8 +3,8 @@ package currency
 import (
 	"math/rand"
 
-	"github.com/idoall/gocryptotrader/common"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 // NewPairsFromStrings takes in currency pair strings and returns a currency

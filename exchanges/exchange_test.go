@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/currency"
-	"github.com/idoall/gocryptotrader/exchanges/request"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/exchanges/request"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
 )
 
 const (

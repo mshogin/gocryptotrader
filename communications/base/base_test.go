@@ -3,8 +3,8 @@ package base
 import (
 	"testing"
 
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
 )
 
 var (

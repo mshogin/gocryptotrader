@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/idoall/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/common"
 )
 
 // NewPairDelimiter splits the desired currency string at delimeter, the returns

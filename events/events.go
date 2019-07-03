@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/communications"
-	"github.com/idoall/gocryptotrader/communications/base"
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/currency"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/communications"
+	"github.com/thrasher-/gocryptotrader/communications/base"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 const (

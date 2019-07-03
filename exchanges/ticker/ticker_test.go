@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoall/gocryptotrader/currency"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/currency"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 func TestPriceToString(t *testing.T) {

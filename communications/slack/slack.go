@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/communications/base"
-	"github.com/idoall/gocryptotrader/config"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/communications/base"
+	"github.com/thrasher-/gocryptotrader/config"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 // const declares main slack url and commands that will be supported on client

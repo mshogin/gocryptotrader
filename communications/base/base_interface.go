@@ -3,10 +3,10 @@ package base
 import (
 	"time"
 
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 // IComm is the main interface array across the communication packages

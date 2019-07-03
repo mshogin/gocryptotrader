@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/idoall/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/common"
 )
 
 // IFXProvider enforces standard functions for all foreign exchange providers

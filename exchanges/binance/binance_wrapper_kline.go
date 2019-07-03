@@ -4,8 +4,8 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/exchanges/kline"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/exchanges/kline"
 )
 
 // GetKlines  checks and returns a requested kline if it exists

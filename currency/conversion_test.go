@@ -3,7 +3,7 @@ package currency
 import (
 	"testing"
 
-	"github.com/idoall/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/common"
 )
 
 func TestNewConversionFromString(t *testing.T) {

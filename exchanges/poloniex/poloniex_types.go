@@ -3,7 +3,7 @@ package poloniex
 import (
 	"time"
 
-	"github.com/idoall/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/currency"
 )
 
 // Ticker holds ticker data

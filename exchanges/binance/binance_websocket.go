@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/idoall/TokenExchangeCommon/commonutils"
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/currency"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
-	"github.com/idoall/gocryptotrader/exchanges/ticker"
+	"github.com/thrasher-/TokenExchangeCommon/commonutils"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/currency"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/exchanges/ticker"
 )
 
 const (

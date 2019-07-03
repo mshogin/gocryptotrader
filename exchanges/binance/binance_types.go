@@ -5,7 +5,7 @@ package binance
 import (
 	"encoding/json"
 
-	"github.com/idoall/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/currency"
 )
 
 // Response holds basic binance api response data

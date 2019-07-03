@@ -12,16 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/communications"
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/connchecker"
-	"github.com/idoall/gocryptotrader/currency"
-	"github.com/idoall/gocryptotrader/currency/coinmarketcap"
-	exchange "github.com/idoall/gocryptotrader/exchanges"
-	log "github.com/idoall/gocryptotrader/logger"
-	"github.com/idoall/gocryptotrader/ntpclient"
-	"github.com/idoall/gocryptotrader/portfolio"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/communications"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/connchecker"
+	"github.com/thrasher-/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/currency/coinmarketcap"
+	exchange "github.com/thrasher-/gocryptotrader/exchanges"
+	log "github.com/thrasher-/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/ntpclient"
+	"github.com/thrasher-/gocryptotrader/portfolio"
 )
 
 // Bot contains configuration, portfolio, exchange & ticker data and is the

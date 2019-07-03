@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/currency"
 )
 
 // const values for the ticker package

@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/config"
-	"github.com/idoall/gocryptotrader/currency"
-	log "github.com/idoall/gocryptotrader/logger"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/currency"
+	log "github.com/thrasher-/gocryptotrader/logger"
 )
 
 // Const vars for websocket

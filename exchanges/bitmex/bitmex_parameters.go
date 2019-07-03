@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/idoall/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/common"
 )
 
 // Parameter just enforces a check on all outgoing data

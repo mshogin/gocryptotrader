@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/idoall/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/common"
 )
 
 func encodePEM(privKey *ecdsa.PrivateKey, pubKey bool) ([]byte, error) {

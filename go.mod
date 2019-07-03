@@ -1,4 +1,4 @@
-module github.com/idoall/gocryptotrader
+module github.com/thrasher-/gocryptotrader
 
 go 1.12
 

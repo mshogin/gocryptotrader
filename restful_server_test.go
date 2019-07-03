@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoall/gocryptotrader/config"
+	"github.com/thrasher-/gocryptotrader/config"
 )
 
 func loadConfig(t *testing.T) *config.Config {

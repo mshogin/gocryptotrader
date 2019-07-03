@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/idoall/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/currency"
 )
 
 // const values for orderbook package

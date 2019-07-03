@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idoall/gocryptotrader/common"
-	"github.com/idoall/gocryptotrader/exchanges/request"
+	"github.com/thrasher-/gocryptotrader/common"
+	"github.com/thrasher-/gocryptotrader/exchanges/request"
 )
 
 // Coinmarketcap account plan bitmasks, url and enpoint consts

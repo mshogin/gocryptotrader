@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoall/gocryptotrader/currency"
-	"github.com/idoall/gocryptotrader/exchanges/orderbook"
+	"github.com/thrasher-/gocryptotrader/currency"
+	"github.com/thrasher-/gocryptotrader/exchanges/orderbook"
 )
 
 var wsTest Base
