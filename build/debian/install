@@ -1,0 +1,2 @@
+build/package/systemd/gocryptotrader.service lib/systemd/system/
+gocryptotrader usr/bin/

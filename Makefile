@@ -9,13 +9,12 @@ DRIVER ?= psql
 RACE_FLAG := $(if $(NO_RACE_TEST),,-race)
 CONFIG_FLAG = $(if $(CONFIG),-config $(CONFIG),)
 
-.PHONY: get linter check test build install update_deps
+.PHONY: clean get linter check test build install update_deps profile_heap profile_cpu gen_db_models target/sqlboiler.json
 
 all: check build
 
-.PHONY: get linter check test build install update_deps
-
-all: check build
+clean: ## Remove previous build
+	rm -f gocryptotrader
 
 get:
 	GO111MODULE=on go get $(GCTPKG)
@@ -49,15 +48,12 @@ update_deps:
 	rm -rf vendor
 	GO111MODULE=on go mod vendor
 
-.PHONY: profile_heap
 profile_heap:
 	go tool pprof -http "localhost:$(GCTPROFILERLISTENPORT)" 'http://localhost:$(GCTLISTENPORT)/debug/pprof/heap'
 
-.PHONY: profile_cpu
 profile_cpu:
 	go tool pprof -http "localhost:$(GCTPROFILERLISTENPORT)" 'http://localhost:$(GCTLISTENPORT)/debug/pprof/profile'
 
-.PHONY: gen_db_models
 gen_db_models: target/sqlboiler.json
 ifeq ($(DRIVER), psql)
 	sqlboiler -c $< -o database/models/postgres -p postgres --no-auto-timestamps --wipe $(DRIVER)
