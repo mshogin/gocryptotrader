@@ -11,7 +11,7 @@ CONFIG_FLAG = $(if $(CONFIG),-config $(CONFIG),)
 
 .PHONY: clean get linter check test build install update_deps profile_heap profile_cpu gen_db_models target/sqlboiler.json
 
-all: check build
+all: build
 
 clean: ## Remove previous build
 	rm -f gocryptotrader
