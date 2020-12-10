@@ -1,0 +1,10 @@
+Source: gocryptotrader
+Section: free
+Priority: optional
+Maintainer: THRASHER CORPORATION <contact@thrasher.io>
+Build-Depends: debhelper, dh-systemd, dpkg-dev
+
+Package: gocryptotrader
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: A cryptocurrency trading bot supporting multiple exchanges written in Golang.
