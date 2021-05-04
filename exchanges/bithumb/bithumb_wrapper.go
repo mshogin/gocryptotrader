@@ -116,9 +116,13 @@ func (b *Bithumb) SetDefaults() {
 	b.Requester = request.New(b.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(SetRateLimit()))
-
-	b.API.Endpoints.URLDefault = apiURL
-	b.API.Endpoints.URL = b.API.Endpoints.URLDefault
+	b.API.Endpoints = b.NewEndpoints()
+	err = b.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot: apiURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup takes in the supplied exchange configuration details and sets params
@@ -204,7 +208,6 @@ func (b *Bithumb) UpdateTicker(p currency.Pair, assetType asset.Item) (*ticker.P
 				fmt.Errorf("enabled pair %s [%s] not found in returned ticker map %v",
 					pairs[i], pairs, tickers)
 		}
-
 		err = ticker.ProcessTicker(&ticker.Price{
 			High:         t.MaxPrice,
 			Low:          t.MinPrice,
@@ -242,16 +245,21 @@ func (b *Bithumb) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderb
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (b *Bithumb) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	orderBook := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        b.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: b.CanVerifyOrderbook,
+	}
 	curr := p.Base.String()
 
 	orderbookNew, err := b.GetOrderBook(curr)
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for i := range orderbookNew.Data.Bids {
-		orderBook.Bids = append(orderBook.Bids,
+		book.Bids = append(book.Bids,
 			orderbook.Item{
 				Amount: orderbookNew.Data.Bids[i].Quantity,
 				Price:  orderbookNew.Data.Bids[i].Price,
@@ -259,28 +267,23 @@ func (b *Bithumb) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*order
 	}
 
 	for i := range orderbookNew.Data.Asks {
-		orderBook.Asks = append(orderBook.Asks,
+		book.Asks = append(book.Asks,
 			orderbook.Item{
 				Amount: orderbookNew.Data.Asks[i].Quantity,
 				Price:  orderbookNew.Data.Asks[i].Price,
 			})
 	}
 
-	orderBook.Pair = p
-	orderBook.ExchangeName = b.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(b.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // Bithumb exchange
-func (b *Bithumb) UpdateAccountInfo() (account.Holdings, error) {
+func (b *Bithumb) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var info account.Holdings
 	bal, err := b.GetAccountBalance("ALL")
 	if err != nil {
@@ -316,10 +319,10 @@ func (b *Bithumb) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (b *Bithumb) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(b.Name)
+func (b *Bithumb) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(b.Name, assetType)
 	if err != nil {
-		return b.UpdateAccountInfo()
+		return b.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -622,7 +625,7 @@ func (b *Bithumb) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, 
 	}
 
 	order.FilterOrdersBySide(&orders, req.Side)
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
 	return orders, nil
 }
@@ -673,15 +676,15 @@ func (b *Bithumb) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, 
 	}
 
 	order.FilterOrdersBySide(&orders, req.Side)
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
 	return orders, nil
 }
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (b *Bithumb) ValidateCredentials() error {
-	_, err := b.UpdateAccountInfo()
+func (b *Bithumb) ValidateCredentials(assetType asset.Item) error {
+	_, err := b.UpdateAccountInfo(assetType)
 	return b.CheckTransientError(err)
 }
 

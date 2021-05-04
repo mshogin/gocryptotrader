@@ -113,10 +113,14 @@ func (c *COINUT) SetDefaults() {
 
 	c.Requester = request.New(c.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout))
-
-	c.API.Endpoints.URLDefault = coinutAPIURL
-	c.API.Endpoints.URL = c.API.Endpoints.URLDefault
-	c.API.Endpoints.WebsocketURL = coinutWebsocketURL
+	c.API.Endpoints = c.NewEndpoints()
+	err = c.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      coinutAPIURL,
+		exchange.WebsocketSpot: coinutWebsocketURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	c.Websocket = stream.New()
 	c.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
 	c.WebsocketResponseCheckTimeout = exchange.DefaultWebsocketResponseCheckTimeout
@@ -136,6 +140,11 @@ func (c *COINUT) Setup(exch *config.ExchangeConfig) error {
 		return err
 	}
 
+	wsRunningURL, err := c.API.Endpoints.GetURL(exchange.WebsocketSpot)
+	if err != nil {
+		return err
+	}
+
 	err = c.Websocket.Setup(&stream.WebsocketSetup{
 		Enabled:                          exch.Features.Enabled.Websocket,
 		Verbose:                          exch.Verbose,
@@ -143,14 +152,14 @@ func (c *COINUT) Setup(exch *config.ExchangeConfig) error {
 		WebsocketTimeout:                 exch.WebsocketTrafficTimeout,
 		DefaultURL:                       coinutWebsocketURL,
 		ExchangeName:                     exch.Name,
-		RunningURL:                       exch.API.Endpoints.WebsocketURL,
+		RunningURL:                       wsRunningURL,
 		Connector:                        c.WsConnect,
 		Subscriber:                       c.Subscribe,
 		UnSubscriber:                     c.Unsubscribe,
 		GenerateSubscriptions:            c.GenerateDefaultSubscriptions,
 		Features:                         &c.Features.Supports.WebsocketCapabilities,
-		OrderbookBufferLimit:             exch.WebsocketOrderbookBufferLimit,
-		BufferEnabled:                    true,
+		OrderbookBufferLimit:             exch.OrderbookConfig.WebsocketBufferLimit,
+		BufferEnabled:                    exch.OrderbookConfig.WebsocketBufferEnabled,
 		SortBuffer:                       true,
 		SortBufferByUpdateIDs:            true,
 	})
@@ -294,7 +303,7 @@ func (c *COINUT) UpdateTradablePairs(forceUpdate bool) error {
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // COINUT exchange
-func (c *COINUT) UpdateAccountInfo() (account.Holdings, error) {
+func (c *COINUT) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var info account.Holdings
 	var bal *UserBalance
 	var err error
@@ -384,10 +393,10 @@ func (c *COINUT) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (c *COINUT) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(c.Name)
+func (c *COINUT) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(c.Name, assetType)
 	if err != nil {
-		return c.UpdateAccountInfo()
+		return c.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -453,44 +462,47 @@ func (c *COINUT) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (c *COINUT) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	orderBook := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        c.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: c.CanVerifyOrderbook,
+	}
 	err := c.loadInstrumentsIfNotLoaded()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	fpair, err := c.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	instID := c.instrumentMap.LookupID(fpair.String())
 	if instID == 0 {
-		return orderBook, errLookupInstrumentID
+		return book, errLookupInstrumentID
 	}
 
 	orderbookNew, err := c.GetInstrumentOrderbook(instID, 200)
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for x := range orderbookNew.Buy {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{Amount: orderbookNew.Buy[x].Quantity, Price: orderbookNew.Buy[x].Price})
+		book.Bids = append(book.Bids, orderbook.Item{
+			Amount: orderbookNew.Buy[x].Quantity,
+			Price:  orderbookNew.Buy[x].Price})
 	}
 
 	for x := range orderbookNew.Sell {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{Amount: orderbookNew.Sell[x].Quantity, Price: orderbookNew.Sell[x].Price})
+		book.Asks = append(book.Asks, orderbook.Item{
+			Amount: orderbookNew.Sell[x].Quantity,
+			Price:  orderbookNew.Sell[x].Price})
 	}
-
-	orderBook.Pair = p
-	orderBook.ExchangeName = c.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(c.Name, p, assetType)
 }
 
@@ -916,7 +928,7 @@ func (c *COINUT) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, e
 		}
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -1022,7 +1034,7 @@ func (c *COINUT) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, e
 		}
 	}
 
-	order.FilterOrdersByTickRange(&allOrders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&allOrders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&allOrders, req.Side)
 	return allOrders, nil
 }
@@ -1051,8 +1063,8 @@ func (c *COINUT) loadInstrumentsIfNotLoaded() error {
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (c *COINUT) ValidateCredentials() error {
-	_, err := c.UpdateAccountInfo()
+func (c *COINUT) ValidateCredentials(assetType asset.Item) error {
+	_, err := c.UpdateAccountInfo(assetType)
 	return c.CheckTransientError(err)
 }
 

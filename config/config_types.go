@@ -123,13 +123,13 @@ type ExchangeConfig struct {
 	WebsocketResponseCheckTimeout time.Duration          `json:"websocketResponseCheckTimeout"`
 	WebsocketResponseMaxLimit     time.Duration          `json:"websocketResponseMaxLimit"`
 	WebsocketTrafficTimeout       time.Duration          `json:"websocketTrafficTimeout"`
-	WebsocketOrderbookBufferLimit int                    `json:"websocketOrderbookBufferLimit"`
 	ProxyAddress                  string                 `json:"proxyAddress,omitempty"`
 	BaseCurrencies                currency.Currencies    `json:"baseCurrencies"`
 	CurrencyPairs                 *currency.PairsManager `json:"currencyPairs"`
 	API                           APIConfig              `json:"api"`
 	Features                      *FeaturesConfig        `json:"features"`
 	BankAccounts                  []banking.Account      `json:"bankAccounts,omitempty"`
+	OrderbookConfig               `json:"orderbook"`
 
 	// Deprecated settings which will be removed in a future update
 	AvailablePairs                   *currency.Pairs      `json:"availablePairs,omitempty"`
@@ -375,7 +375,15 @@ type APIConfig struct {
 	AuthenticatedWebsocketSupport bool `json:"authenticatedWebsocketApiSupport"`
 	PEMKeySupport                 bool `json:"pemKeySupport,omitempty"`
 
-	Endpoints            APIEndpointsConfig             `json:"endpoints"`
 	Credentials          APICredentialsConfig           `json:"credentials"`
 	CredentialsValidator *APICredentialsValidatorConfig `json:"credentialsValidator,omitempty"`
+	OldEndPoints         *APIEndpointsConfig            `json:"endpoints,omitempty"`
+	Endpoints            map[string]string              `json:"urlEndpoints"`
+}
+
+// OrderbookConfig stores the orderbook configuration variables
+type OrderbookConfig struct {
+	VerificationBypass     bool `json:"verificationBypass"`
+	WebsocketBufferLimit   int  `json:"websocketBufferLimit"`
+	WebsocketBufferEnabled bool `json:"websocketBufferEnabled"`
 }

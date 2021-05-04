@@ -94,11 +94,14 @@ func (b *Bitflyer) SetDefaults() {
 	b.Requester = request.New(b.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(SetRateLimit()))
-
-	b.API.Endpoints.URLDefault = japanURL
-	b.API.Endpoints.URL = b.API.Endpoints.URLDefault
-	b.API.Endpoints.URLSecondaryDefault = chainAnalysis
-	b.API.Endpoints.URLSecondary = b.API.Endpoints.URLSecondaryDefault
+	b.API.Endpoints = b.NewEndpoints()
+	err = b.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      japanURL,
+		exchange.ChainAnalysis: chainAnalysis,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup takes in the supplied exchange configuration details and sets params
@@ -250,33 +253,38 @@ func (b *Bitflyer) FetchOrderbook(p currency.Pair, assetType asset.Item) (*order
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (b *Bitflyer) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	fPair, err := b.FormatExchangeCurrency(p, assetType)
-	if err != nil {
-		return nil, err
+	book := &orderbook.Base{
+		Exchange:        b.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: b.CanVerifyOrderbook,
 	}
 
-	orderBook := new(orderbook.Base)
+	fPair, err := b.FormatExchangeCurrency(p, assetType)
+	if err != nil {
+		return book, err
+	}
 
 	orderbookNew, err := b.GetOrderBook(b.CheckFXString(fPair).String())
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for x := range orderbookNew.Asks {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{Price: orderbookNew.Asks[x].Price, Amount: orderbookNew.Asks[x].Size})
+		book.Asks = append(book.Asks, orderbook.Item{
+			Price:  orderbookNew.Asks[x].Price,
+			Amount: orderbookNew.Asks[x].Size})
 	}
 
 	for x := range orderbookNew.Bids {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{Price: orderbookNew.Bids[x].Price, Amount: orderbookNew.Bids[x].Size})
+		book.Bids = append(book.Bids, orderbook.Item{
+			Price:  orderbookNew.Bids[x].Price,
+			Amount: orderbookNew.Bids[x].Size})
 	}
 
-	orderBook.Pair = fPair
-	orderBook.ExchangeName = b.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	return orderbook.Get(b.Name, fPair, assetType)
@@ -284,15 +292,15 @@ func (b *Bitflyer) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orde
 
 // UpdateAccountInfo retrieves balances for all enabled currencies on the
 // Bitflyer exchange
-func (b *Bitflyer) UpdateAccountInfo() (account.Holdings, error) {
+func (b *Bitflyer) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	return account.Holdings{}, common.ErrNotYetImplemented
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (b *Bitflyer) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(b.Name)
+func (b *Bitflyer) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(b.Name, assetType)
 	if err != nil {
-		return b.UpdateAccountInfo()
+		return b.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -437,8 +445,8 @@ func (b *Bitflyer) GetFeeByType(feeBuilder *exchange.FeeBuilder) (float64, error
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (b *Bitflyer) ValidateCredentials() error {
-	_, err := b.UpdateAccountInfo()
+func (b *Bitflyer) ValidateCredentials(assetType asset.Item) error {
+	_, err := b.UpdateAccountInfo(assetType)
 	return b.CheckTransientError(err)
 }
 

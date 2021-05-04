@@ -75,6 +75,7 @@ func (c *Coinbene) SetDefaults() {
 	err = c.StoreAssetPairFormat(asset.PerpetualSwap, currency.PairStore{
 		RequestFormat: &currency.PairFormat{
 			Uppercase: true,
+			Delimiter: currency.DashDelimiter,
 		},
 		ConfigFormat: &currency.PairFormat{
 			Uppercase: true,
@@ -146,10 +147,15 @@ func (c *Coinbene) SetDefaults() {
 	c.Requester = request.New(c.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(SetRateLimit()))
-
-	c.API.Endpoints.URLDefault = coinbeneAPIURL
-	c.API.Endpoints.URL = c.API.Endpoints.URLDefault
-	c.API.Endpoints.WebsocketURL = wsContractURL
+	c.API.Endpoints = c.NewEndpoints()
+	err = c.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      coinbeneAPIURL,
+		exchange.RestSwap:      coinbeneSwapAPIURL,
+		exchange.WebsocketSpot: wsContractURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	c.Websocket = stream.New()
 	c.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
 	c.WebsocketResponseCheckTimeout = exchange.DefaultWebsocketResponseCheckTimeout
@@ -168,6 +174,11 @@ func (c *Coinbene) Setup(exch *config.ExchangeConfig) error {
 		return err
 	}
 
+	wsRunningURL, err := c.API.Endpoints.GetURL(exchange.WebsocketSpot)
+	if err != nil {
+		return err
+	}
+
 	err = c.Websocket.Setup(&stream.WebsocketSetup{
 		Enabled:                          exch.Features.Enabled.Websocket,
 		Verbose:                          exch.Verbose,
@@ -175,14 +186,14 @@ func (c *Coinbene) Setup(exch *config.ExchangeConfig) error {
 		WebsocketTimeout:                 exch.WebsocketTrafficTimeout,
 		DefaultURL:                       wsContractURL,
 		ExchangeName:                     exch.Name,
-		RunningURL:                       exch.API.Endpoints.WebsocketURL,
+		RunningURL:                       wsRunningURL,
 		Connector:                        c.WsConnect,
 		Subscriber:                       c.Subscribe,
 		UnSubscriber:                     c.Unsubscribe,
 		GenerateSubscriptions:            c.GenerateDefaultSubscriptions,
 		Features:                         &c.Features.Supports.WebsocketCapabilities,
-		OrderbookBufferLimit:             exch.WebsocketOrderbookBufferLimit,
-		BufferEnabled:                    true,
+		OrderbookBufferLimit:             exch.OrderbookConfig.WebsocketBufferLimit,
+		BufferEnabled:                    exch.OrderbookConfig.WebsocketBufferEnabled,
 		SortBuffer:                       true,
 	})
 	if err != nil {
@@ -247,23 +258,17 @@ func (c *Coinbene) FetchTradablePairs(a asset.Item) ([]string, error) {
 			currencies = append(currencies, pairs[x].Symbol)
 		}
 	case asset.PerpetualSwap:
-		format, err := c.GetPairFormat(a, false)
+		instruments, err := c.GetSwapInstruments()
 		if err != nil {
 			return nil, err
 		}
-
-		tickers, err := c.GetSwapTickers()
+		pFmt, err := c.GetPairFormat(asset.PerpetualSwap, false)
 		if err != nil {
 			return nil, err
 		}
-		for t := range tickers {
-			idx := strings.Index(t, currency.USDT.String())
-			if idx == 0 {
-				return nil,
-					fmt.Errorf("%s SWAP currency does not contain USDT", c.Name)
-			}
+		for x := range instruments {
 			currencies = append(currencies,
-				t[0:idx]+format.Delimiter+t[idx:])
+				instruments[x].InstrumentID.Format(pFmt.Delimiter, pFmt.Uppercase).String())
 		}
 	}
 	return currencies, nil
@@ -405,15 +410,20 @@ func (c *Coinbene) FetchOrderbook(p currency.Pair, assetType asset.Item) (*order
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (c *Coinbene) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	resp := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        c.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: c.CanVerifyOrderbook,
+	}
 	if !c.SupportsAsset(assetType) {
-		return nil,
+		return book,
 			fmt.Errorf("%s does not support asset type %s", c.Name, assetType)
 	}
 
 	fpair, err := c.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	var tempResp Orderbook
@@ -428,11 +438,8 @@ func (c *Coinbene) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orde
 		)
 	}
 	if err != nil {
-		return nil, err
+		return book, err
 	}
-	resp.ExchangeName = c.Name
-	resp.Pair = p
-	resp.AssetType = assetType
 	for x := range tempResp.Asks {
 		item := orderbook.Item{
 			Price:  tempResp.Asks[x].Price,
@@ -441,7 +448,7 @@ func (c *Coinbene) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orde
 		if assetType == asset.PerpetualSwap {
 			item.OrderCount = tempResp.Asks[x].Count
 		}
-		resp.Asks = append(resp.Asks, item)
+		book.Asks = append(book.Asks, item)
 	}
 	for x := range tempResp.Bids {
 		item := orderbook.Item{
@@ -451,18 +458,18 @@ func (c *Coinbene) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orde
 		if assetType == asset.PerpetualSwap {
 			item.OrderCount = tempResp.Bids[x].Count
 		}
-		resp.Bids = append(resp.Bids, item)
+		book.Bids = append(book.Bids, item)
 	}
-	err = resp.Process()
+	err = book.Process()
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 	return orderbook.Get(c.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // Coinbene exchange
-func (c *Coinbene) UpdateAccountInfo() (account.Holdings, error) {
+func (c *Coinbene) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var info account.Holdings
 	balance, err := c.GetAccountBalances()
 	if err != nil {
@@ -492,10 +499,10 @@ func (c *Coinbene) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (c *Coinbene) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(c.Name)
+func (c *Coinbene) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(c.Name, assetType)
 	if err != nil {
-		return c.UpdateAccountInfo()
+		return c.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -818,8 +825,8 @@ func (c *Coinbene) AuthenticateWebsocket() error {
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (c *Coinbene) ValidateCredentials() error {
-	_, err := c.UpdateAccountInfo()
+func (c *Coinbene) ValidateCredentials(assetType asset.Item) error {
+	_, err := c.UpdateAccountInfo(assetType)
 	return c.CheckTransientError(err)
 }
 

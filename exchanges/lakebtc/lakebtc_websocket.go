@@ -50,11 +50,7 @@ func (l *LakeBTC) WsConnect() error {
 		return err
 	}
 	go l.wsHandleIncomingData()
-	subs, err := l.GenerateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
-	return l.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 func (l *LakeBTC) listenToEndpoints() error {
@@ -178,10 +174,11 @@ func (l *LakeBTC) processOrderbook(obUpdate, channel string) error {
 	}
 
 	book := orderbook.Base{
-		Pair:         p,
-		LastUpdated:  time.Now(),
-		AssetType:    asset.Spot,
-		ExchangeName: l.Name,
+		Pair:            p,
+		LastUpdated:     time.Now(),
+		Asset:           asset.Spot,
+		Exchange:        l.Name,
+		VerifyOrderbook: l.CanVerifyOrderbook,
 	}
 
 	for i := range update.Asks {

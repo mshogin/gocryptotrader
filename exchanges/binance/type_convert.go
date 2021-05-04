@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/thrasher-corp/gocryptotrader/common/convert"
-	"github.com/thrasher-corp/gocryptotrader/currency"
-	"github.com/thrasher-corp/gocryptotrader/exchanges/asset"
 )
 
 // binanceTime provides an internal conversion helper
@@ -111,6 +109,7 @@ func (a *KlineStream) UnmarshalJSON(data []byte) error {
 		Kline     struct {
 			StartTime binanceTime `json:"t"`
 			CloseTime binanceTime `json:"T"`
+			*KlineStreamData
 		} `json:"k"`
 		*Alias
 	}{
@@ -119,6 +118,7 @@ func (a *KlineStream) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	a.Kline = *aux.Kline.KlineStreamData
 	a.EventTime = aux.EventTime.Time()
 	a.Kline.StartTime = aux.Kline.StartTime.Time()
 	a.Kline.CloseTime = aux.Kline.CloseTime.Time()
@@ -214,6 +214,78 @@ func (a *QueryOrderData) UnmarshalJSON(data []byte) error {
 }
 
 // UnmarshalJSON deserialises the JSON info, including the timestamp
+func (a *FuturesOrderData) UnmarshalJSON(data []byte) error {
+	type Alias FuturesOrderData
+	aux := &struct {
+		Time       binanceTime `json:"time"`
+		UpdateTime binanceTime `json:"updateTime"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.Time = aux.Time.Time()
+	a.UpdateTime = aux.UpdateTime.Time()
+	return nil
+}
+
+// UnmarshalJSON deserialises the JSON info, including the timestamp
+func (a *UFuturesOrderData) UnmarshalJSON(data []byte) error {
+	type Alias UFuturesOrderData
+	aux := &struct {
+		Time       binanceTime `json:"time"`
+		UpdateTime binanceTime `json:"updateTime"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.Time = aux.Time.Time()
+	a.UpdateTime = aux.UpdateTime.Time()
+	return nil
+}
+
+// UnmarshalJSON deserialises the JSON info, including the timestamp
+func (a *FuturesOrderGetData) UnmarshalJSON(data []byte) error {
+	type Alias FuturesOrderGetData
+	aux := &struct {
+		Time       binanceTime `json:"time"`
+		UpdateTime binanceTime `json:"updateTime"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.Time = aux.Time.Time()
+	a.UpdateTime = aux.UpdateTime.Time()
+	return nil
+}
+
+// UnmarshalJSON deserialises the JSON info, including the timestamp
+func (a *UOrderData) UnmarshalJSON(data []byte) error {
+	type Alias UOrderData
+	aux := &struct {
+		Time       binanceTime `json:"time"`
+		UpdateTime binanceTime `json:"updateTime"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.Time = aux.Time.Time()
+	a.UpdateTime = aux.UpdateTime.Time()
+	return nil
+}
+
+// UnmarshalJSON deserialises the JSON info, including the timestamp
 func (a *Account) UnmarshalJSON(data []byte) error {
 	type Alias Account
 	aux := &struct {
@@ -252,6 +324,7 @@ func (a *wsAccountInfo) UnmarshalJSON(data []byte) error {
 		Data struct {
 			EventTime   binanceTime `json:"E"`
 			LastUpdated binanceTime `json:"u"`
+			*WsAccountInfoData
 		} `json:"data"`
 		*Alias
 	}{
@@ -260,6 +333,7 @@ func (a *wsAccountInfo) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	a.Data = *aux.Data.WsAccountInfoData
 	a.Data.EventTime = aux.Data.EventTime.Time()
 	a.Data.LastUpdated = aux.Data.LastUpdated.Time()
 	return nil
@@ -272,6 +346,7 @@ func (a *wsAccountPosition) UnmarshalJSON(data []byte) error {
 		Data struct {
 			EventTime   binanceTime `json:"E"`
 			LastUpdated binanceTime `json:"u"`
+			*WsAccountPositionData
 		} `json:"data"`
 		*Alias
 	}{
@@ -280,6 +355,7 @@ func (a *wsAccountPosition) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	a.Data = *aux.Data.WsAccountPositionData
 	a.Data.EventTime = aux.Data.EventTime.Time()
 	a.Data.LastUpdated = aux.Data.LastUpdated.Time()
 	return nil
@@ -292,6 +368,7 @@ func (a *wsBalanceUpdate) UnmarshalJSON(data []byte) error {
 		Data struct {
 			EventTime binanceTime `json:"E"`
 			ClearTime binanceTime `json:"T"`
+			*WsBalanceUpdateData
 		} `json:"data"`
 		*Alias
 	}{
@@ -300,6 +377,7 @@ func (a *wsBalanceUpdate) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	a.Data = *aux.Data.WsBalanceUpdateData
 	a.Data.EventTime = aux.Data.EventTime.Time()
 	a.Data.ClearTime = aux.Data.ClearTime.Time()
 	return nil
@@ -313,6 +391,7 @@ func (a *wsOrderUpdate) UnmarshalJSON(data []byte) error {
 			EventTime         binanceTime `json:"E"`
 			OrderCreationTime binanceTime `json:"O"`
 			TransactionTime   binanceTime `json:"T"`
+			*WsOrderUpdateData
 		} `json:"data"`
 		*Alias
 	}{
@@ -321,6 +400,7 @@ func (a *wsOrderUpdate) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	a.Data = *aux.Data.WsOrderUpdateData
 	a.Data.EventTime = aux.Data.EventTime.Time()
 	a.Data.OrderCreationTime = aux.Data.OrderCreationTime.Time()
 	a.Data.TransactionTime = aux.Data.TransactionTime.Time()
@@ -334,6 +414,7 @@ func (a *wsListStatus) UnmarshalJSON(data []byte) error {
 		Data struct {
 			EventTime       binanceTime `json:"E"`
 			TransactionTime binanceTime `json:"T"`
+			*WsListStatusData
 		} `json:"data"`
 		*Alias
 	}{
@@ -342,17 +423,8 @@ func (a *wsListStatus) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	a.Data = *aux.Data.WsListStatusData
 	a.Data.EventTime = aux.Data.EventTime.Time()
 	a.Data.TransactionTime = aux.Data.TransactionTime.Time()
 	return nil
-}
-
-// formatSymbol formats the given pair to a string suitable for exchange API requests
-// currently applicable to Spot and Margin assets
-func (b *Binance) formatSymbol(pair currency.Pair) (string, error) {
-	pairFmt, err := b.GetPairFormat(asset.Spot, true)
-	if err != nil {
-		return pair.String(), err
-	}
-	return pairFmt.Format(pair), nil
 }

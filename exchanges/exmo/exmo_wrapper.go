@@ -108,9 +108,13 @@ func (e *EXMO) SetDefaults() {
 	e.Requester = request.New(e.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(request.NewBasicRateLimit(exmoRateInterval, exmoRequestRate)))
-
-	e.API.Endpoints.URLDefault = exmoAPIURL
-	e.API.Endpoints.URL = e.API.Endpoints.URLDefault
+	e.API.Endpoints = e.NewEndpoints()
+	err = e.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot: exmoAPIURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup takes in the supplied exchange configuration details and sets params
@@ -235,25 +239,38 @@ func (e *EXMO) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderbook
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (e *EXMO) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
+	callingBook := &orderbook.Base{
+		Exchange:        e.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: e.CanVerifyOrderbook,
+	}
 	enabledPairs, err := e.GetEnabledPairs(assetType)
 	if err != nil {
-		return nil, err
+		return callingBook, err
 	}
 
 	pairsCollated, err := e.FormatExchangeCurrencies(enabledPairs, assetType)
 	if err != nil {
-		return nil, err
+		return callingBook, err
 	}
 
 	result, err := e.GetOrderbook(pairsCollated)
 	if err != nil {
-		return nil, err
+		return callingBook, err
 	}
 
 	for i := range enabledPairs {
+		book := &orderbook.Base{
+			Exchange:        e.Name,
+			Pair:            enabledPairs[i],
+			Asset:           assetType,
+			VerifyOrderbook: e.CanVerifyOrderbook,
+		}
+
 		curr, err := e.FormatExchangeCurrency(enabledPairs[i], assetType)
 		if err != nil {
-			return nil, err
+			return callingBook, err
 		}
 
 		data, ok := result[curr.String()]
@@ -261,20 +278,19 @@ func (e *EXMO) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderboo
 			continue
 		}
 
-		orderBook := new(orderbook.Base)
 		for y := range data.Ask {
 			var price, amount float64
 			price, err = strconv.ParseFloat(data.Ask[y][0], 64)
 			if err != nil {
-				return orderBook, err
+				return book, err
 			}
 
 			amount, err = strconv.ParseFloat(data.Ask[y][1], 64)
 			if err != nil {
-				return orderBook, err
+				return book, err
 			}
 
-			orderBook.Asks = append(orderBook.Asks, orderbook.Item{
+			book.Asks = append(book.Asks, orderbook.Item{
 				Price:  price,
 				Amount: amount,
 			})
@@ -284,27 +300,23 @@ func (e *EXMO) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderboo
 			var price, amount float64
 			price, err = strconv.ParseFloat(data.Bid[y][0], 64)
 			if err != nil {
-				return orderBook, err
+				return book, err
 			}
 
 			amount, err = strconv.ParseFloat(data.Bid[y][1], 64)
 			if err != nil {
-				return orderBook, err
+				return book, err
 			}
 
-			orderBook.Bids = append(orderBook.Bids, orderbook.Item{
+			book.Bids = append(book.Bids, orderbook.Item{
 				Price:  price,
 				Amount: amount,
 			})
 		}
 
-		orderBook.Pair = enabledPairs[i]
-		orderBook.ExchangeName = e.Name
-		orderBook.AssetType = assetType
-
-		err = orderBook.Process()
+		err = book.Process()
 		if err != nil {
-			return orderBook, err
+			return book, err
 		}
 	}
 	return orderbook.Get(e.Name, p, assetType)
@@ -312,7 +324,7 @@ func (e *EXMO) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderboo
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // Exmo exchange
-func (e *EXMO) UpdateAccountInfo() (account.Holdings, error) {
+func (e *EXMO) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var response account.Holdings
 	response.Exchange = e.Name
 	result, err := e.GetUserInfo()
@@ -348,10 +360,10 @@ func (e *EXMO) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (e *EXMO) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(e.Name)
+func (e *EXMO) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(e.Name, assetType)
 	if err != nil {
-		return e.UpdateAccountInfo()
+		return e.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -589,7 +601,7 @@ func (e *EXMO) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, err
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -640,15 +652,15 @@ func (e *EXMO) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, err
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (e *EXMO) ValidateCredentials() error {
-	_, err := e.UpdateAccountInfo()
+func (e *EXMO) ValidateCredentials(assetType asset.Item) error {
+	_, err := e.UpdateAccountInfo(assetType)
 	return e.CheckTransientError(err)
 }
 

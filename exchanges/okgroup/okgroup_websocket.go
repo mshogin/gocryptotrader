@@ -203,11 +203,7 @@ func (o *OKGroup) WsConnect() error {
 		}
 	}
 
-	subs, err := o.GenerateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
-	return o.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 // WsLogin sends a login request to websocket to enable access to authenticated endpoints
@@ -682,12 +678,13 @@ func (o *OKGroup) WsProcessPartialOrderBook(wsEventData *WebsocketOrderBook, ins
 	}
 
 	newOrderBook := orderbook.Base{
-		Asks:         asks,
-		Bids:         bids,
-		AssetType:    a,
-		LastUpdated:  wsEventData.Timestamp,
-		Pair:         instrument,
-		ExchangeName: o.Name,
+		Asks:            asks,
+		Bids:            bids,
+		Asset:           a,
+		LastUpdated:     wsEventData.Timestamp,
+		Pair:            instrument,
+		Exchange:        o.Name,
+		VerifyOrderbook: o.CanVerifyOrderbook,
 	}
 	return o.Websocket.Orderbook.LoadSnapshot(&newOrderBook)
 }
@@ -717,7 +714,10 @@ func (o *OKGroup) WsProcessUpdateOrderbook(wsEventData *WebsocketOrderBook, inst
 		return err
 	}
 
-	updatedOb := o.Websocket.Orderbook.GetOrderbook(instrument, a)
+	updatedOb, err := o.Websocket.Orderbook.GetOrderbook(instrument, a)
+	if err != nil {
+		return err
+	}
 	checksum := o.CalculateUpdateOrderbookChecksum(updatedOb)
 
 	if checksum != wsEventData.Checksum {

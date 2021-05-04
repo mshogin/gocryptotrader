@@ -100,12 +100,8 @@ func TestValidate(t *testing.T) {
 	}
 
 	for x := range tester {
-		if err := tester[x].Submit.Validate(tester[x].ValidOpts); err != tester[x].ExpectedErr {
-			if err != nil && tester[x].ExpectedErr != nil {
-				if err.Error() == tester[x].ExpectedErr.Error() {
-					continue
-				}
-			}
+		err := tester[x].Submit.Validate(tester[x].ValidOpts)
+		if !errors.Is(err, tester[x].ExpectedErr) {
 			t.Errorf("Unexpected result. Got: %v, want: %v", err, tester[x].ExpectedErr)
 		}
 	}
@@ -203,7 +199,7 @@ func TestFilterOrdersBySide(t *testing.T) {
 	}
 }
 
-func TestFilterOrdersByTickRange(t *testing.T) {
+func TestFilterOrdersByTimeRange(t *testing.T) {
 	t.Parallel()
 
 	var orders = []Detail{
@@ -218,24 +214,30 @@ func TestFilterOrdersByTickRange(t *testing.T) {
 		},
 	}
 
-	FilterOrdersByTickRange(&orders, time.Unix(0, 0), time.Unix(0, 0))
+	FilterOrdersByTimeRange(&orders, time.Unix(0, 0), time.Unix(0, 0))
 	if len(orders) != 3 {
 		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 3, len(orders))
 	}
 
-	FilterOrdersByTickRange(&orders, time.Unix(100, 0), time.Unix(111, 0))
+	FilterOrdersByTimeRange(&orders, time.Unix(100, 0), time.Unix(111, 0))
 	if len(orders) != 3 {
 		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 3, len(orders))
 	}
 
-	FilterOrdersByTickRange(&orders, time.Unix(101, 0), time.Unix(111, 0))
+	FilterOrdersByTimeRange(&orders, time.Unix(101, 0), time.Unix(111, 0))
 	if len(orders) != 2 {
 		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 2, len(orders))
 	}
 
-	FilterOrdersByTickRange(&orders, time.Unix(200, 0), time.Unix(300, 0))
+	FilterOrdersByTimeRange(&orders, time.Unix(200, 0), time.Unix(300, 0))
 	if len(orders) != 0 {
 		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 0, len(orders))
+	}
+	orders = append(orders, Detail{})
+	// test for event no timestamp is set on an order, best to include it
+	FilterOrdersByTimeRange(&orders, time.Unix(200, 0), time.Unix(300, 0))
+	if len(orders) != 1 {
+		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 1, len(orders))
 	}
 }
 
@@ -276,6 +278,11 @@ func TestFilterOrdersByCurrencies(t *testing.T) {
 	}
 
 	currencies = []currency.Pair{}
+	FilterOrdersByCurrencies(&orders, currencies)
+	if len(orders) != 1 {
+		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 1, len(orders))
+	}
+	currencies = append(currencies, currency.Pair{})
 	FilterOrdersByCurrencies(&orders, currencies)
 	if len(orders) != 1 {
 		t.Errorf("Orders failed to be filtered. Expected %v, received %v", 1, len(orders))
@@ -506,6 +513,9 @@ var stringsToOrderType = []struct {
 	{"any", AnyType, nil},
 	{"ANY", AnyType, nil},
 	{"aNy", AnyType, nil},
+	{"trigger", Trigger, nil},
+	{"TRIGGER", Trigger, nil},
+	{"tRiGgEr", Trigger, nil},
 	{"woahMan", UnknownType, errors.New("woahMan not recognised as order type")},
 }
 
@@ -595,7 +605,7 @@ func TestUpdateOrderFromModify(t *testing.T) {
 		HiddenOrder:       false,
 		FillOrKill:        false,
 		PostOnly:          false,
-		Leverage:          "",
+		Leverage:          0,
 		Price:             0,
 		Amount:            0,
 		LimitPriceUpper:   0,
@@ -631,7 +641,7 @@ func TestUpdateOrderFromModify(t *testing.T) {
 		HiddenOrder:       true,
 		FillOrKill:        true,
 		PostOnly:          true,
-		Leverage:          "1",
+		Leverage:          1.0,
 		Price:             1,
 		Amount:            1,
 		LimitPriceUpper:   1,
@@ -672,7 +682,7 @@ func TestUpdateOrderFromModify(t *testing.T) {
 	if !od.PostOnly {
 		t.Error("Failed to update")
 	}
-	if od.Leverage != "1" {
+	if od.Leverage != 1 {
 		t.Error("Failed to update")
 	}
 	if od.Price != 1 {
@@ -787,7 +797,7 @@ func TestUpdateOrderFromDetail(t *testing.T) {
 		HiddenOrder:       false,
 		FillOrKill:        false,
 		PostOnly:          false,
-		Leverage:          "",
+		Leverage:          0,
 		Price:             0,
 		Amount:            0,
 		LimitPriceUpper:   0,
@@ -823,7 +833,7 @@ func TestUpdateOrderFromDetail(t *testing.T) {
 		HiddenOrder:       true,
 		FillOrKill:        true,
 		PostOnly:          true,
-		Leverage:          "1",
+		Leverage:          1,
 		Price:             1,
 		Amount:            1,
 		LimitPriceUpper:   1,
@@ -864,7 +874,7 @@ func TestUpdateOrderFromDetail(t *testing.T) {
 	if !od.PostOnly {
 		t.Error("Failed to update")
 	}
-	if od.Leverage != "1" {
+	if od.Leverage != 1 {
 		t.Error("Failed to update")
 	}
 	if od.Price != 1 {
@@ -1024,8 +1034,8 @@ func TestValidationOnOrderTypes(t *testing.T) {
 	}
 
 	getOrders = new(GetOrdersRequest)
-	if getOrders.Validate() != nil {
-		t.Fatal("should not error")
+	if getOrders.Validate() == nil {
+		t.Fatal("should error since assetType hasn't been provided")
 	}
 
 	if getOrders.Validate(validate.Check(func() error {
@@ -1036,8 +1046,8 @@ func TestValidationOnOrderTypes(t *testing.T) {
 
 	if getOrders.Validate(validate.Check(func() error {
 		return nil
-	})) != nil {
-		t.Fatal("unexpected error")
+	})) == nil {
+		t.Fatal("should output an error since assetType isn't provided")
 	}
 
 	var modifyOrder *Modify

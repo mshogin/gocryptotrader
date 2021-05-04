@@ -59,8 +59,14 @@ func (g *Gemini) SetDefaults() {
 	g.API.CredentialsValidator.RequiresKey = true
 	g.API.CredentialsValidator.RequiresSecret = true
 
-	requestFmt := &currency.PairFormat{Uppercase: true}
-	configFmt := &currency.PairFormat{Uppercase: true}
+	requestFmt := &currency.PairFormat{
+		Uppercase: true,
+		Separator: ",",
+	}
+	configFmt := &currency.PairFormat{
+		Uppercase: true,
+		Delimiter: currency.DashDelimiter,
+	}
 	err := g.SetGlobalPairsManager(requestFmt, configFmt, asset.Spot)
 	if err != nil {
 		log.Errorln(log.ExchangeSys, err)
@@ -93,6 +99,8 @@ func (g *Gemini) SetDefaults() {
 				AuthenticatedEndpoints: true,
 				MessageSequenceNumbers: true,
 				KlineFetching:          true,
+				Subscribe:              true,
+				Unsubscribe:            true,
 			},
 			WithdrawPermissions: exchange.AutoWithdrawCryptoWithAPIPermission |
 				exchange.AutoWithdrawCryptoWithSetup |
@@ -106,10 +114,14 @@ func (g *Gemini) SetDefaults() {
 	g.Requester = request.New(g.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(SetRateLimit()))
-
-	g.API.Endpoints.URLDefault = geminiAPIURL
-	g.API.Endpoints.URL = g.API.Endpoints.URLDefault
-	g.API.Endpoints.WebsocketURL = geminiWebsocketEndpoint
+	g.API.Endpoints = g.NewEndpoints()
+	err = g.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      geminiAPIURL,
+		exchange.WebsocketSpot: geminiWebsocketEndpoint,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	g.Websocket = stream.New()
 	g.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
 	g.WebsocketResponseCheckTimeout = exchange.DefaultWebsocketResponseCheckTimeout
@@ -129,22 +141,51 @@ func (g *Gemini) Setup(exch *config.ExchangeConfig) error {
 	}
 
 	if exch.UseSandbox {
-		g.API.Endpoints.URL = geminiSandboxAPIURL
+		err = g.API.Endpoints.SetRunning(exchange.RestSpot.String(), geminiSandboxAPIURL)
+		if err != nil {
+			log.Error(log.ExchangeSys, err)
+		}
 	}
 
-	return g.Websocket.Setup(&stream.WebsocketSetup{
+	wsRunningURL, err := g.API.Endpoints.GetURL(exchange.WebsocketSpot)
+	if err != nil {
+		return err
+	}
+
+	err = g.Websocket.Setup(&stream.WebsocketSetup{
 		Enabled:                          exch.Features.Enabled.Websocket,
 		Verbose:                          exch.Verbose,
 		AuthenticatedWebsocketAPISupport: exch.API.AuthenticatedWebsocketSupport,
 		WebsocketTimeout:                 exch.WebsocketTrafficTimeout,
 		DefaultURL:                       geminiWebsocketEndpoint,
 		ExchangeName:                     exch.Name,
-		RunningURL:                       exch.API.Endpoints.WebsocketURL,
+		RunningURL:                       wsRunningURL,
 		Connector:                        g.WsConnect,
+		Subscriber:                       g.Subscribe,
+		UnSubscriber:                     g.Unsubscribe,
+		GenerateSubscriptions:            g.GenerateDefaultSubscriptions,
 		Features:                         &g.Features.Supports.WebsocketCapabilities,
-		OrderbookBufferLimit:             exch.WebsocketOrderbookBufferLimit,
-		BufferEnabled:                    true,
-		SortBuffer:                       true,
+		OrderbookBufferLimit:             exch.OrderbookConfig.WebsocketBufferLimit,
+		BufferEnabled:                    exch.OrderbookConfig.WebsocketBufferEnabled,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = g.Websocket.SetupNewConnection(stream.ConnectionSetup{
+		ResponseCheckTimeout: exch.WebsocketResponseCheckTimeout,
+		ResponseMaxLimit:     exch.WebsocketResponseMaxLimit,
+		URL:                  geminiWebsocketEndpoint + "/v2/" + geminiWsMarketData,
+	})
+	if err != nil {
+		return err
+	}
+
+	return g.Websocket.SetupNewConnection(stream.ConnectionSetup{
+		ResponseCheckTimeout: exch.WebsocketResponseCheckTimeout,
+		ResponseMaxLimit:     exch.WebsocketResponseMaxLimit,
+		URL:                  geminiWebsocketEndpoint + "/v1/" + geminiWsOrderEvents,
+		Authenticated:        true,
 	})
 }
 
@@ -163,25 +204,92 @@ func (g *Gemini) Run() {
 		g.PrintEnabledPairs()
 	}
 
-	if !g.GetEnabledFeatures().AutoPairUpdates {
+	forceUpdate := false
+	format, err := g.GetPairFormat(asset.Spot, false)
+	if err != nil {
+		log.Errorf(log.ExchangeSys, "%s failed to get enabled currencies. Err %s\n",
+			g.Name,
+			err)
 		return
 	}
 
-	err := g.UpdateTradablePairs(false)
+	enabled, err := g.CurrencyPairs.GetPairs(asset.Spot, true)
 	if err != nil {
-		log.Errorf(log.ExchangeSys, "%s failed to update tradable pairs. Err: %s", g.Name, err)
+		log.Errorf(log.ExchangeSys, "%s failed to get enabled currencies. Err %s\n",
+			g.Name,
+			err)
+		return
+	}
+
+	avail, err := g.CurrencyPairs.GetPairs(asset.Spot, false)
+	if err != nil {
+		log.Errorf(log.ExchangeSys, "%s failed to get available currencies. Err %s\n",
+			g.Name,
+			err)
+		return
+	}
+
+	if !common.StringDataContains(enabled.Strings(), format.Delimiter) ||
+		!common.StringDataContains(avail.Strings(), format.Delimiter) {
+		var enabledPairs currency.Pairs
+		enabledPairs, err = currency.NewPairsFromStrings([]string{
+			currency.BTC.String() + format.Delimiter + currency.USD.String()})
+		if err != nil {
+			log.Errorf(log.ExchangeSys, "%s failed to update currencies. Err %s\n",
+				g.Name,
+				err)
+		} else {
+			log.Warn(log.ExchangeSys,
+				"Available pairs for Gemini reset due to config upgrade, please enable the ones you would like to use again")
+			forceUpdate = true
+
+			err = g.UpdatePairs(enabledPairs, asset.Spot, true, true)
+			if err != nil {
+				log.Errorf(log.ExchangeSys,
+					"%s failed to update currencies. Err: %s\n",
+					g.Name,
+					err)
+			}
+		}
+	}
+
+	if !g.GetEnabledFeatures().AutoPairUpdates && !forceUpdate {
+		return
+	}
+	err = g.UpdateTradablePairs(forceUpdate)
+	if err != nil {
+		log.Errorf(log.ExchangeSys,
+			"%s failed to update tradable pairs. Err: %s",
+			g.Name,
+			err)
 	}
 }
 
 // FetchTradablePairs returns a list of the exchanges tradable pairs
 func (g *Gemini) FetchTradablePairs(asset asset.Item) ([]string, error) {
-	return g.GetSymbols()
+	pairs, err := g.GetSymbols()
+	if err != nil {
+		return nil, err
+	}
+
+	var tradablePairs []string
+	for x := range pairs {
+		switch len(pairs[x]) {
+		case 8:
+			tradablePairs = append(tradablePairs, pairs[x][0:5]+currency.DashDelimiter+pairs[x][5:])
+		case 7:
+			tradablePairs = append(tradablePairs, pairs[x][0:4]+currency.DashDelimiter+pairs[x][4:])
+		default:
+			tradablePairs = append(tradablePairs, pairs[x][0:3]+currency.DashDelimiter+pairs[x][3:])
+		}
+	}
+	return tradablePairs, nil
 }
 
 // UpdateTradablePairs updates the exchanges available pairs and stores
 // them in the exchanges config
 func (g *Gemini) UpdateTradablePairs(forceUpdate bool) error {
-	pairs, err := g.GetSymbols()
+	pairs, err := g.FetchTradablePairs(asset.Spot)
 	if err != nil {
 		return err
 	}
@@ -196,7 +304,7 @@ func (g *Gemini) UpdateTradablePairs(forceUpdate bool) error {
 
 // UpdateAccountInfo Retrieves balances for all enabled currencies for the
 // Gemini exchange
-func (g *Gemini) UpdateAccountInfo() (account.Holdings, error) {
+func (g *Gemini) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var response account.Holdings
 	response.Exchange = g.Name
 	accountBalance, err := g.GetBalances()
@@ -226,10 +334,10 @@ func (g *Gemini) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (g *Gemini) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(g.Name)
+func (g *Gemini) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(g.Name, assetType)
 	if err != nil {
-		return g.UpdateAccountInfo()
+		return g.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -294,34 +402,37 @@ func (g *Gemini) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (g *Gemini) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
+	book := &orderbook.Base{
+		Exchange:        g.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: g.CanVerifyOrderbook,
+	}
 	fPair, err := g.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
-	orderBook := new(orderbook.Base)
 	orderbookNew, err := g.GetOrderbook(fPair.String(), url.Values{})
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for x := range orderbookNew.Bids {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{Amount: orderbookNew.Bids[x].Amount, Price: orderbookNew.Bids[x].Price})
+		book.Bids = append(book.Bids, orderbook.Item{
+			Amount: orderbookNew.Bids[x].Amount,
+			Price:  orderbookNew.Bids[x].Price})
 	}
 
 	for x := range orderbookNew.Asks {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{Amount: orderbookNew.Asks[x].Amount, Price: orderbookNew.Asks[x].Price})
+		book.Asks = append(book.Asks, orderbook.Item{
+			Amount: orderbookNew.Asks[x].Amount,
+			Price:  orderbookNew.Asks[x].Price})
 	}
-
-	orderBook.Pair = fPair
-	orderBook.ExchangeName = g.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(g.Name, fPair, assetType)
 }
 
@@ -548,7 +659,12 @@ func (g *Gemini) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, e
 		return nil, err
 	}
 
-	format, err := g.GetPairFormat(asset.Spot, false)
+	availPairs, err := g.GetAvailablePairs(asset.Spot)
+	if err != nil {
+		return nil, err
+	}
+
+	format, err := g.GetPairFormat(asset.Spot, true)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +672,7 @@ func (g *Gemini) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, e
 	var orders []order.Detail
 	for i := range resp {
 		var symbol currency.Pair
-		symbol, err = currency.NewPairDelimiter(resp[i].Symbol, format.Delimiter)
+		symbol, err = currency.NewPairFromFormattedPairs(resp[i].Symbol, availPairs, format)
 		if err != nil {
 			return nil, err
 		}
@@ -584,7 +700,7 @@ func (g *Gemini) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, e
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	order.FilterOrdersByType(&orders, req.Type)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
@@ -609,7 +725,7 @@ func (g *Gemini) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, e
 			return nil, err
 		}
 
-		resp, err := g.GetTradeHistory(fpair.String(), req.StartTicks.Unix())
+		resp, err := g.GetTradeHistory(fpair.String(), req.StartTime.Unix())
 		if err != nil {
 			return nil, err
 		}
@@ -645,15 +761,15 @@ func (g *Gemini) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, e
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (g *Gemini) ValidateCredentials() error {
-	_, err := g.UpdateAccountInfo()
+func (g *Gemini) ValidateCredentials(assetType asset.Item) error {
+	_, err := g.UpdateAccountInfo(assetType)
 	return g.CheckTransientError(err)
 }
 

@@ -30,21 +30,30 @@ type FakePassingExchange struct {
 }
 
 // addPassingFakeExchange adds an exchange to engine tests where all funcs return a positive result
-func addPassingFakeExchange(baseExchangeName string) error {
-	testExch := Bot.GetExchangeByName(baseExchangeName)
+func addPassingFakeExchange(baseExchangeName string, bot *Engine) error {
+	testExch := bot.GetExchangeByName(baseExchangeName)
 	if testExch == nil {
 		return ErrExchangeNotFound
 	}
+
 	base := testExch.GetBase()
-	Bot.Config.Exchanges = append(Bot.Config.Exchanges, config.ExchangeConfig{
+	bot.Config.Exchanges = append(bot.Config.Exchanges, config.ExchangeConfig{
 		Name:    fakePassExchange,
 		Enabled: true,
 		Verbose: false,
 	})
+	b := true
+	var pairStoreData = currency.PairStore{
+		AssetEnabled: &b,
+	}
+	var currencyMap = make(map[asset.Item]*currency.PairStore)
+	currencyMap[asset.Spot] = &pairStoreData
 
-	Bot.exchangeManager.add(&FakePassingExchange{
+	bot.exchangeManager.add(&FakePassingExchange{
 		Base: exchange.Base{
-			Name:                          fakePassExchange,
+			Name: fakePassExchange,
+			CurrencyPairs: currency.PairsManager{
+				Pairs: currencyMap},
 			Enabled:                       true,
 			LoadedByConfig:                true,
 			SkipAuthCheck:                 true,
@@ -65,13 +74,13 @@ func addPassingFakeExchange(baseExchangeName string) error {
 	return nil
 }
 
-func (h *FakePassingExchange) Setup(_ *config.ExchangeConfig) error { return nil }
-func (h *FakePassingExchange) Start(_ *sync.WaitGroup)              {}
-func (h *FakePassingExchange) SetDefaults()                         {}
-func (h *FakePassingExchange) GetName() string                      { return fakePassExchange }
-func (h *FakePassingExchange) IsEnabled() bool                      { return true }
-func (h *FakePassingExchange) SetEnabled(bool)                      {}
-func (h *FakePassingExchange) ValidateCredentials() error           { return nil }
+func (h *FakePassingExchange) Setup(_ *config.ExchangeConfig) error   { return nil }
+func (h *FakePassingExchange) Start(_ *sync.WaitGroup)                {}
+func (h *FakePassingExchange) SetDefaults()                           {}
+func (h *FakePassingExchange) GetName() string                        { return fakePassExchange }
+func (h *FakePassingExchange) IsEnabled() bool                        { return true }
+func (h *FakePassingExchange) SetEnabled(bool)                        {}
+func (h *FakePassingExchange) ValidateCredentials(_ asset.Item) error { return nil }
 
 func (h *FakePassingExchange) FetchTicker(_ currency.Pair, _ asset.Item) (*ticker.Price, error) {
 	return nil, nil
@@ -97,7 +106,7 @@ func (h *FakePassingExchange) GetAvailablePairs(_ asset.Item) (currency.Pairs, e
 	return currency.Pairs{}, nil
 }
 
-func (h *FakePassingExchange) FetchAccountInfo() (account.Holdings, error) {
+func (h *FakePassingExchange) FetchAccountInfo(_ asset.Item) (account.Holdings, error) {
 	return account.Holdings{
 		Exchange: h.Name,
 		Accounts: []account.SubAccount{
@@ -114,7 +123,7 @@ func (h *FakePassingExchange) FetchAccountInfo() (account.Holdings, error) {
 	}, nil
 }
 
-func (h *FakePassingExchange) UpdateAccountInfo() (account.Holdings, error) {
+func (h *FakePassingExchange) UpdateAccountInfo(_ asset.Item) (account.Holdings, error) {
 	return account.Holdings{
 		Exchange: h.Name,
 		Accounts: []account.SubAccount{
@@ -221,7 +230,6 @@ func (h *FakePassingExchange) GetSubscriptions() ([]stream.ChannelSubscription, 
 	return nil, nil
 }
 func (h *FakePassingExchange) GetDefaultConfig() (*config.ExchangeConfig, error) { return nil, nil }
-func (h *FakePassingExchange) GetBase() *exchange.Base                           { return nil }
 func (h *FakePassingExchange) SupportsAsset(_ asset.Item) bool                   { return true }
 func (h *FakePassingExchange) GetHistoricCandles(_ currency.Pair, _ asset.Item, _, _ time.Time, _ kline.Interval) (kline.Item, error) {
 	return kline.Item{}, nil

@@ -40,12 +40,8 @@ func (b *Bitstamp) WsConnect() error {
 	if err != nil {
 		b.Websocket.DataHandler <- err
 	}
-	subs, err := b.generateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
 	go b.wsReadData()
-	return b.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 // wsReadData receives and passes on websocket messages for processing
@@ -243,12 +239,13 @@ func (b *Bitstamp) wsUpdateOrderbook(update websocketOrderBook, p currency.Pair,
 		bids = append(bids, orderbook.Item{Price: target, Amount: amount})
 	}
 	return b.Websocket.Orderbook.LoadSnapshot(&orderbook.Base{
-		Bids:         bids,
-		Asks:         asks,
-		Pair:         p,
-		LastUpdated:  time.Unix(update.Timestamp, 0),
-		AssetType:    assetType,
-		ExchangeName: b.Name,
+		Bids:            bids,
+		Asks:            asks,
+		Pair:            p,
+		LastUpdated:     time.Unix(update.Timestamp, 0),
+		Asset:           assetType,
+		Exchange:        b.Name,
+		VerifyOrderbook: b.CanVerifyOrderbook,
 	})
 }
 
@@ -278,8 +275,9 @@ func (b *Bitstamp) seedOrderBook() error {
 			})
 		}
 		newOrderBook.Pair = p[x]
-		newOrderBook.AssetType = asset.Spot
-		newOrderBook.ExchangeName = b.Name
+		newOrderBook.Asset = asset.Spot
+		newOrderBook.Exchange = b.Name
+		newOrderBook.VerifyOrderbook = b.CanVerifyOrderbook
 
 		err = b.Websocket.Orderbook.LoadSnapshot(&newOrderBook)
 		if err != nil {

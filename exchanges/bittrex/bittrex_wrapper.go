@@ -96,9 +96,13 @@ func (b *Bittrex) SetDefaults() {
 	b.Requester = request.New(b.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(request.NewBasicRateLimit(bittrexRateInterval, bittrexRequestRate)))
-
-	b.API.Endpoints.URLDefault = bittrexAPIURL
-	b.API.Endpoints.URL = b.API.Endpoints.URLDefault
+	b.API.Endpoints = b.NewEndpoints()
+	err = b.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot: bittrexAPIURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup method sets current configuration details if enabled
@@ -224,7 +228,7 @@ func (b *Bittrex) UpdateTradablePairs(forceUpdate bool) error {
 
 // UpdateAccountInfo Retrieves balances for all enabled currencies for the
 // Bittrex exchange
-func (b *Bittrex) UpdateAccountInfo() (account.Holdings, error) {
+func (b *Bittrex) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var response account.Holdings
 	response.Exchange = b.Name
 	accountBalance, err := b.GetAccountBalances()
@@ -254,10 +258,10 @@ func (b *Bittrex) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (b *Bittrex) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(b.Name)
+func (b *Bittrex) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(b.Name, assetType)
 	if err != nil {
-		return b.UpdateAccountInfo()
+		return b.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -328,9 +332,15 @@ func (b *Bittrex) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderb
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (b *Bittrex) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
+	book := &orderbook.Base{
+		Exchange:        b.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: b.CanVerifyOrderbook,
+	}
 	fpair, err := b.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	orderbookNew, err := b.GetOrderbook(fpair.String())
@@ -338,9 +348,8 @@ func (b *Bittrex) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*order
 		return nil, err
 	}
 
-	orderBook := new(orderbook.Base)
 	for x := range orderbookNew.Result.Buy {
-		orderBook.Bids = append(orderBook.Bids,
+		book.Bids = append(book.Bids,
 			orderbook.Item{
 				Amount: orderbookNew.Result.Buy[x].Quantity,
 				Price:  orderbookNew.Result.Buy[x].Rate,
@@ -349,23 +358,17 @@ func (b *Bittrex) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*order
 	}
 
 	for x := range orderbookNew.Result.Sell {
-		orderBook.Asks = append(orderBook.Asks,
+		book.Asks = append(book.Asks,
 			orderbook.Item{
 				Amount: orderbookNew.Result.Sell[x].Quantity,
 				Price:  orderbookNew.Result.Sell[x].Rate,
 			},
 		)
 	}
-
-	orderBook.Pair = p
-	orderBook.ExchangeName = b.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(b.Name, p, assetType)
 }
 
@@ -627,7 +630,7 @@ func (b *Bittrex) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, 
 	}
 
 	order.FilterOrdersByType(&orders, req.Type)
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
 	return orders, nil
 }
@@ -696,15 +699,15 @@ func (b *Bittrex) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, 
 	}
 
 	order.FilterOrdersByType(&orders, req.Type)
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
 	return orders, nil
 }
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (b *Bittrex) ValidateCredentials() error {
-	_, err := b.UpdateAccountInfo()
+func (b *Bittrex) ValidateCredentials(assetType asset.Item) error {
+	_, err := b.UpdateAccountInfo(assetType)
 	return b.CheckTransientError(err)
 }
 

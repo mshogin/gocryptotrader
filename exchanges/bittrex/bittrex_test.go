@@ -304,8 +304,8 @@ func TestGetFee(t *testing.T) {
 	// CryptocurrencyWithdrawalFee Basic
 	feeBuilder = setFeeBuilder()
 	feeBuilder.FeeType = exchange.CryptocurrencyWithdrawalFee
-	if resp, err := b.GetFee(feeBuilder); resp != float64(0.0005) || err != nil {
-		t.Errorf("Expected: %f, Received: %f", float64(0.0005), resp)
+	if resp, err := b.GetFee(feeBuilder); resp != float64(0.0003) || err != nil {
+		t.Errorf("Expected: %f, Received: %f", float64(0.0003), resp)
 		t.Error(err)
 	}
 
@@ -351,8 +351,9 @@ func TestGetActiveOrders(t *testing.T) {
 	}
 
 	var getOrdersRequest = order.GetOrdersRequest{
-		Type:  order.AnyType,
-		Pairs: []currency.Pair{p},
+		Type:      order.AnyType,
+		Pairs:     []currency.Pair{p},
+		AssetType: asset.Spot,
 	}
 
 	getOrdersRequest.Pairs[0].Delimiter = "-"
@@ -367,7 +368,8 @@ func TestGetActiveOrders(t *testing.T) {
 
 func TestGetOrderHistory(t *testing.T) {
 	var getOrdersRequest = order.GetOrdersRequest{
-		Type: order.AnyType,
+		Type:      order.AnyType,
+		AssetType: asset.Spot,
 	}
 
 	_, err := b.GetOrderHistory(&getOrdersRequest)

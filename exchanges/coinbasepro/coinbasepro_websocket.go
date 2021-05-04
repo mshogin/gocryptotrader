@@ -38,12 +38,8 @@ func (c *CoinbasePro) WsConnect() error {
 		return err
 	}
 
-	subs, err := c.GenerateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
 	go c.wsReadData()
-	return c.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 // wsReadData receives and passes on websocket messages for processing
@@ -313,9 +309,10 @@ func (c *CoinbasePro) ProcessSnapshot(snapshot *WebsocketOrderbookSnapshot) erro
 		return err
 	}
 
-	base.AssetType = asset.Spot
+	base.Asset = asset.Spot
 	base.Pair = pair
-	base.ExchangeName = c.Name
+	base.Exchange = c.Name
+	base.VerifyOrderbook = c.CanVerifyOrderbook
 
 	return c.Websocket.Orderbook.LoadSnapshot(&base)
 }

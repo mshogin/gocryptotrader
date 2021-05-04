@@ -61,15 +61,6 @@ func (c *COINUT) WsConnect() error {
 		c.Websocket.SetCanUseAuthenticatedEndpoints(false)
 		log.Error(log.WebsocketMgr, err)
 	}
-	subs, err := c.GenerateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
-
-	err = c.Websocket.SubscribeToChannels(subs)
-	if err != nil {
-		return err
-	}
 
 	// define bi-directional communication
 	channels = make(map[string]chan []byte)
@@ -539,6 +530,7 @@ func (c *COINUT) WsProcessOrderbookSnapshot(ob *WsOrderbookSnapshot) error {
 	var newOrderBook orderbook.Base
 	newOrderBook.Asks = asks
 	newOrderBook.Bids = bids
+	newOrderBook.VerifyOrderbook = c.CanVerifyOrderbook
 
 	pairs, err := c.GetEnabledPairs(asset.Spot)
 	if err != nil {
@@ -558,8 +550,8 @@ func (c *COINUT) WsProcessOrderbookSnapshot(ob *WsOrderbookSnapshot) error {
 		return err
 	}
 
-	newOrderBook.AssetType = asset.Spot
-	newOrderBook.ExchangeName = c.Name
+	newOrderBook.Asset = asset.Spot
+	newOrderBook.Exchange = c.Name
 
 	return c.Websocket.Orderbook.LoadSnapshot(&newOrderBook)
 }

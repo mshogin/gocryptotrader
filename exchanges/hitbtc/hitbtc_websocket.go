@@ -50,11 +50,7 @@ func (h *HitBTC) WsConnect() error {
 		log.Errorf(log.ExchangeSys, "%v - authentication failed: %v\n", h.Name, err)
 	}
 
-	subs, err := h.GenerateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
-	return h.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 // wsReadData receives and passes on websocket messages for processing
@@ -331,9 +327,10 @@ func (h *HitBTC) WsProcessOrderbookSnapshot(ob WsOrderbook) error {
 		h.Websocket.DataHandler <- err
 		return err
 	}
-	newOrderBook.AssetType = asset.Spot
+	newOrderBook.Asset = asset.Spot
 	newOrderBook.Pair = p
-	newOrderBook.ExchangeName = h.Name
+	newOrderBook.Exchange = h.Name
+	newOrderBook.VerifyOrderbook = h.CanVerifyOrderbook
 
 	return h.Websocket.Orderbook.LoadSnapshot(&newOrderBook)
 }

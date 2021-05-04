@@ -125,13 +125,13 @@ func (e Exchange) CancelOrder(exch, orderID string, cp currency.Pair, a asset.It
 }
 
 // AccountInformation returns account information (balance etc) for requested exchange
-func (e Exchange) AccountInformation(exch string) (account.Holdings, error) {
+func (e Exchange) AccountInformation(exch string, assetType asset.Item) (account.Holdings, error) {
 	ex, err := e.GetExchange(exch)
 	if err != nil {
 		return account.Holdings{}, err
 	}
 
-	accountInfo, err := ex.FetchAccountInfo()
+	accountInfo, err := ex.FetchAccountInfo(assetType)
 	if err != nil {
 		return account.Holdings{}, err
 	}
@@ -182,7 +182,7 @@ func (e Exchange) WithdrawalFiatFunds(bankAccountID string, request *withdraw.Re
 	request.Fiat.Bank.SWIFTCode = v.SWIFTCode
 	request.Fiat.Bank.IBAN = v.IBAN
 
-	resp, err := engine.SubmitWithdrawal(request)
+	resp, err := engine.Bot.SubmitWithdrawal(request)
 	if err != nil {
 		return "", err
 	}
@@ -205,7 +205,7 @@ func (e Exchange) WithdrawalCryptoFunds(request *withdraw.Request) (string, erro
 		request.OneTimePassword = v
 	}
 
-	resp, err := engine.SubmitWithdrawal(request)
+	resp, err := engine.Bot.SubmitWithdrawal(request)
 	if err != nil {
 		return "", err
 	}

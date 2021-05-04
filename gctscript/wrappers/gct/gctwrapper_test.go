@@ -33,6 +33,11 @@ func TestMain(m *testing.M) {
 	engine.Bot.LoadExchange(exch.Value, false, nil)
 	engine.Bot.DepositAddressManager = new(engine.DepositAddressManager)
 	go engine.Bot.DepositAddressManager.Sync()
+	err = engine.Bot.OrderManager.Start(engine.Bot)
+	if err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
 	modules.SetModuleWrapper(Setup())
 	os.Exit(m.Run())
 }
@@ -153,7 +158,7 @@ func TestAccountInfo(t *testing.T) {
 	if !errors.Is(err, objects.ErrWrongNumArguments) {
 		t.Fatal(err)
 	}
-	_, err = gct.ExchangeAccountInfo(exch)
+	_, err = gct.ExchangeAccountInfo(exch, assetType)
 	if err != nil &&
 		!strings.Contains(err.Error(), "unset/default API keys") {
 		t.Error(err)

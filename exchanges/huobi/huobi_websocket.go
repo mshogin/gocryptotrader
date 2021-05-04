@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	baseWSURL = "wss://api.huobi.pro"
+	baseWSURL    = "wss://api.huobi.pro"
+	futuresWSURL = "wss://api.hbdm.com/"
 
 	wsMarketURL    = baseWSURL + "/ws"
 	wsMarketKline  = "market.%s.kline.1min"
@@ -83,11 +84,7 @@ func (h *HUOBI) WsConnect() error {
 	}
 
 	go h.wsReadData()
-	subs, err := h.GenerateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
-	return h.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 func (h *HUOBI) wsDial(dialer *websocket.Dialer) error {
@@ -467,8 +464,9 @@ func (h *HUOBI) WsProcessOrderbook(update *WsDepth, symbol string) error {
 	newOrderBook.Asks = asks
 	newOrderBook.Bids = bids
 	newOrderBook.Pair = p
-	newOrderBook.AssetType = asset.Spot
-	newOrderBook.ExchangeName = h.Name
+	newOrderBook.Asset = asset.Spot
+	newOrderBook.Exchange = h.Name
+	newOrderBook.VerifyOrderbook = h.CanVerifyOrderbook
 
 	return h.Websocket.Orderbook.LoadSnapshot(&newOrderBook)
 }

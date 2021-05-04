@@ -1,8 +1,14 @@
 package asset
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+)
+
+var (
+	// ErrNotSupported is an error for an unsupported asset type
+	ErrNotSupported = errors.New("received unsupported asset type")
 )
 
 // Item stores the asset type
@@ -23,6 +29,8 @@ const (
 	Futures                = Item("futures")
 	UpsideProfitContract   = Item("upsideprofitcontract")
 	DownsideProfitContract = Item("downsideprofitcontract")
+	CoinMarginedFutures    = Item("coinmarginedfutures")
+	USDTMarginedFutures    = Item("usdtmarginedfutures")
 )
 
 var supported = Items{
@@ -36,6 +44,8 @@ var supported = Items{
 	Futures,
 	UpsideProfitContract,
 	DownsideProfitContract,
+	CoinMarginedFutures,
+	USDTMarginedFutures,
 }
 
 // Supported returns a list of supported asset types
@@ -97,7 +107,8 @@ func New(input string) (Item, error) {
 			return supported[i], nil
 		}
 	}
-	return "", fmt.Errorf("cannot create new asset: input %s mismatch to supported asset list %s",
+	return "", fmt.Errorf("%w %v, only supports %v",
+		ErrNotSupported,
 		input,
 		supported)
 }

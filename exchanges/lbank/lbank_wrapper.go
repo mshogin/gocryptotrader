@@ -102,16 +102,19 @@ func (l *Lbank) SetDefaults() {
 					kline.OneDay.Word():     true,
 					kline.OneWeek.Word():    true,
 				},
-				ResultLimit: 2880,
+				ResultLimit: 2000,
 			},
 		},
 	}
-
 	l.Requester = request.New(l.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout))
-
-	l.API.Endpoints.URLDefault = lbankAPIURL
-	l.API.Endpoints.URL = l.API.Endpoints.URLDefault
+	l.API.Endpoints = l.NewEndpoints()
+	err = l.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot: lbankAPIURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup sets exchange configuration profile
@@ -243,58 +246,57 @@ func (l *Lbank) FetchOrderbook(currency currency.Pair, assetType asset.Item) (*o
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (l *Lbank) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	orderBook := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        l.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: l.CanVerifyOrderbook,
+	}
 	fpair, err := l.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	a, err := l.GetMarketDepths(fpair.String(), "60", "1")
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-	for i := range a.Asks {
-		price, convErr := strconv.ParseFloat(a.Asks[i][0], 64)
+	for i := range a.Data.Asks {
+		price, convErr := strconv.ParseFloat(a.Data.Asks[i][0], 64)
 		if convErr != nil {
-			return orderBook, convErr
+			return book, convErr
 		}
-		amount, convErr := strconv.ParseFloat(a.Asks[i][1], 64)
+		amount, convErr := strconv.ParseFloat(a.Data.Asks[i][1], 64)
 		if convErr != nil {
-			return orderBook, convErr
+			return book, convErr
 		}
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{
+		book.Asks = append(book.Asks, orderbook.Item{
 			Price:  price,
-			Amount: amount,
-		})
+			Amount: amount})
 	}
-	for i := range a.Bids {
-		price, convErr := strconv.ParseFloat(a.Bids[i][0], 64)
+	for i := range a.Data.Bids {
+		price, convErr := strconv.ParseFloat(a.Data.Bids[i][0], 64)
 		if convErr != nil {
-			return orderBook, convErr
+			return book, convErr
 		}
-		amount, convErr := strconv.ParseFloat(a.Bids[i][1], 64)
+		amount, convErr := strconv.ParseFloat(a.Data.Bids[i][1], 64)
 		if convErr != nil {
-			return orderBook, convErr
+			return book, convErr
 		}
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{
+		book.Bids = append(book.Bids, orderbook.Item{
 			Price:  price,
-			Amount: amount,
-		})
+			Amount: amount})
 	}
-	orderBook.Pair = p
-	orderBook.ExchangeName = l.Name
-	orderBook.AssetType = assetType
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(l.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // Lbank exchange
-func (l *Lbank) UpdateAccountInfo() (account.Holdings, error) {
+func (l *Lbank) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var info account.Holdings
 	data, err := l.GetUserInfo()
 	if err != nil {
@@ -332,10 +334,10 @@ func (l *Lbank) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (l *Lbank) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(l.Name)
+func (l *Lbank) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(l.Name, assetType)
 	if err != nil {
-		return l.UpdateAccountInfo()
+		return l.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -860,8 +862,8 @@ func (l *Lbank) getAllOpenOrderID() (map[string][]string, error) {
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (l *Lbank) ValidateCredentials() error {
-	_, err := l.UpdateAccountInfo()
+func (l *Lbank) ValidateCredentials(assetType asset.Item) error {
+	_, err := l.UpdateAccountInfo(assetType)
 	return l.CheckTransientError(err)
 }
 
@@ -936,22 +938,23 @@ func (l *Lbank) GetHistoricCandlesExtended(pair currency.Pair, a asset.Item, sta
 		Interval: interval,
 	}
 
-	dates := kline.CalcDateRanges(start, end, interval, l.Features.Enabled.Kline.ResultLimit)
+	dates := kline.CalculateCandleDateRanges(start, end, interval, l.Features.Enabled.Kline.ResultLimit)
 	formattedPair, err := l.FormatExchangeCurrency(pair, a)
 	if err != nil {
 		return kline.Item{}, err
 	}
 
-	for x := range dates {
-		data, err := l.GetKlines(formattedPair.String(),
+	for x := range dates.Ranges {
+		var data []KlineResponse
+		data, err = l.GetKlines(formattedPair.String(),
 			strconv.FormatInt(int64(l.Features.Enabled.Kline.ResultLimit), 10),
 			l.FormatExchangeKlineInterval(interval),
-			strconv.FormatInt(dates[x].Start.UTC().Unix(), 10))
+			strconv.FormatInt(dates.Ranges[x].Start.Ticks, 10))
 		if err != nil {
 			return kline.Item{}, err
 		}
 		for i := range data {
-			if time.Unix(data[i].TimeStamp, 0).UTC().Before(dates[x].Start.UTC()) || time.Unix(data[i].TimeStamp, 0).UTC().After(dates[x].End.UTC()) {
+			if data[i].TimeStamp < dates.Ranges[x].Start.Ticks || data[i].TimeStamp > dates.Ranges[x].End.Ticks {
 				continue
 			}
 			ret.Candles = append(ret.Candles, kline.Candle{
@@ -965,6 +968,12 @@ func (l *Lbank) GetHistoricCandlesExtended(pair currency.Pair, a asset.Item, sta
 		}
 	}
 
+	err = dates.VerifyResultsHaveData(ret.Candles)
+	if err != nil {
+		log.Warnf(log.ExchangeSys, "%s - %s", l.Name, err)
+	}
+	ret.RemoveDuplicates()
+	ret.RemoveOutsideRange(start, end)
 	ret.SortCandlesByTimestamp(false)
 	return ret, nil
 }

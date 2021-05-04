@@ -40,11 +40,7 @@ func (b *BTCMarkets) WsConnect() error {
 		log.Debugf(log.ExchangeSys, "%s Connected to Websocket.\n", b.Name)
 	}
 	go b.wsReadData()
-	subs, err := b.generateDefaultSubscriptions()
-	if err != nil {
-		return err
-	}
-	return b.Websocket.SubscribeToChannels(subs)
+	return nil
 }
 
 // wsReadData receives and passes on websocket messages for processing
@@ -87,7 +83,7 @@ func (b *BTCMarkets) wsHandleData(respRaw []byte) error {
 			return err
 		}
 
-		var bids, asks []orderbook.Item
+		var bids, asks orderbook.Items
 		for x := range ob.Bids {
 			var price, amount float64
 			price, err = strconv.ParseFloat(ob.Bids[x][0].(string), 64)
@@ -121,13 +117,15 @@ func (b *BTCMarkets) wsHandleData(respRaw []byte) error {
 			})
 		}
 		if ob.Snapshot {
+			bids.SortBids() // Alignment completely out, sort is needed.
 			err = b.Websocket.Orderbook.LoadSnapshot(&orderbook.Base{
-				Pair:         p,
-				Bids:         bids,
-				Asks:         asks,
-				LastUpdated:  ob.Timestamp,
-				AssetType:    asset.Spot,
-				ExchangeName: b.Name,
+				Pair:            p,
+				Bids:            bids,
+				Asks:            asks,
+				LastUpdated:     ob.Timestamp,
+				Asset:           asset.Spot,
+				Exchange:        b.Name,
+				VerifyOrderbook: b.CanVerifyOrderbook,
 			})
 		} else {
 			err = b.Websocket.Orderbook.Update(&buffer.Update{

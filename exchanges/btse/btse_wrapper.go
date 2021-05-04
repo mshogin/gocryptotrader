@@ -28,6 +28,11 @@ import (
 	"github.com/thrasher-corp/gocryptotrader/portfolio/withdraw"
 )
 
+const (
+	spotURL   = "spotURL"
+	spotWSURL = "websocketURL"
+)
+
 // GetDefaultConfig returns a default exchange config
 func (b *BTSE) GetDefaultConfig() (*config.ExchangeConfig, error) {
 	b.SetDefaults()
@@ -150,9 +155,15 @@ func (b *BTSE) SetDefaults() {
 	b.Requester = request.New(b.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(SetRateLimit()))
-
-	b.API.Endpoints.URLDefault = btseAPIURL
-	b.API.Endpoints.URL = b.API.Endpoints.URLDefault
+	b.API.Endpoints = b.NewEndpoints()
+	err = b.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      btseAPIURL,
+		exchange.RestFutures:   btseAPIURL,
+		exchange.WebsocketSpot: btseWebsocket,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	b.Websocket = stream.New()
 	b.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
 	b.WebsocketResponseCheckTimeout = exchange.DefaultWebsocketResponseCheckTimeout
@@ -171,6 +182,11 @@ func (b *BTSE) Setup(exch *config.ExchangeConfig) error {
 		return err
 	}
 
+	wsRunningURL, err := b.API.Endpoints.GetURL(exchange.WebsocketSpot)
+	if err != nil {
+		return err
+	}
+
 	err = b.Websocket.Setup(&stream.WebsocketSetup{
 		Enabled:                          exch.Features.Enabled.Websocket,
 		Verbose:                          exch.Verbose,
@@ -178,13 +194,14 @@ func (b *BTSE) Setup(exch *config.ExchangeConfig) error {
 		WebsocketTimeout:                 exch.WebsocketTrafficTimeout,
 		DefaultURL:                       btseWebsocket,
 		ExchangeName:                     exch.Name,
-		RunningURL:                       exch.API.Endpoints.WebsocketURL,
+		RunningURL:                       wsRunningURL,
 		Connector:                        b.WsConnect,
 		Subscriber:                       b.Subscribe,
 		UnSubscriber:                     b.Unsubscribe,
 		GenerateSubscriptions:            b.GenerateDefaultSubscriptions,
 		Features:                         &b.Features.Supports.WebsocketCapabilities,
-		OrderbookBufferLimit:             exch.WebsocketOrderbookBufferLimit,
+		OrderbookBufferLimit:             exch.OrderbookConfig.WebsocketBufferLimit,
+		BufferEnabled:                    exch.OrderbookConfig.WebsocketBufferEnabled,
 	})
 	if err != nil {
 		return err
@@ -318,39 +335,51 @@ func (b *BTSE) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderbook
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (b *BTSE) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
+	book := &orderbook.Base{
+		Exchange:        b.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: b.CanVerifyOrderbook,
+	}
 	fPair, err := b.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 	a, err := b.FetchOrderBook(fPair.String(), 0, 0, 0, assetType == asset.Spot)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
-	orderBook := new(orderbook.Base)
 	for x := range a.BuyQuote {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{
+		if b.orderbookFilter(a.BuyQuote[x].Price, a.BuyQuote[x].Size) {
+			continue
+		}
+		book.Bids = append(book.Bids, orderbook.Item{
 			Price:  a.BuyQuote[x].Price,
 			Amount: a.BuyQuote[x].Size})
 	}
 	for x := range a.SellQuote {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{
+		if b.orderbookFilter(a.SellQuote[x].Price, a.SellQuote[x].Size) {
+			continue
+		}
+		book.Asks = append(book.Asks, orderbook.Item{
 			Price:  a.SellQuote[x].Price,
 			Amount: a.SellQuote[x].Size})
 	}
-	orderBook.Pair = p
-	orderBook.ExchangeName = b.Name
-	orderBook.AssetType = assetType
-	err = orderBook.Process()
+	book.Asks.Reverse() // Reverse asks for correct alignment
+	book.Pair = p
+	book.Exchange = b.Name
+	book.Asset = assetType
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 	return orderbook.Get(b.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // BTSE exchange
-func (b *BTSE) UpdateAccountInfo() (account.Holdings, error) {
+func (b *BTSE) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var a account.Holdings
 	balance, err := b.GetWalletInformation()
 	if err != nil {
@@ -383,10 +412,10 @@ func (b *BTSE) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (b *BTSE) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(b.Name)
+func (b *BTSE) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(b.Name, assetType)
 	if err != nil {
-		return b.UpdateAccountInfo()
+		return b.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -792,7 +821,7 @@ func (b *BTSE) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, err
 	}
 
 	order.FilterOrdersByType(&orders, req.Type)
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -868,8 +897,8 @@ func (b *BTSE) GetFeeByType(feeBuilder *exchange.FeeBuilder) (float64, error) {
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (b *BTSE) ValidateCredentials() error {
-	_, err := b.UpdateAccountInfo()
+func (b *BTSE) ValidateCredentials(assetType asset.Item) error {
+	_, err := b.UpdateAccountInfo(assetType)
 	return b.CheckTransientError(err)
 }
 
@@ -935,7 +964,7 @@ func (b *BTSE) GetHistoricCandlesExtended(pair currency.Pair, a asset.Item, star
 		return kline.Item{}, err
 	}
 
-	if kline.TotalCandlesPerInterval(start, end, interval) > b.Features.Enabled.Kline.ResultLimit {
+	if kline.TotalCandlesPerInterval(start, end, interval) > float64(b.Features.Enabled.Kline.ResultLimit) {
 		return kline.Item{}, errors.New(kline.ErrRequestExceedsExchangeLimits)
 	}
 

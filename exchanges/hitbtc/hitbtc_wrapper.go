@@ -130,10 +130,14 @@ func (h *HitBTC) SetDefaults() {
 	h.Requester = request.New(h.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		request.WithLimiter(SetRateLimit()))
-
-	h.API.Endpoints.URLDefault = apiURL
-	h.API.Endpoints.URL = h.API.Endpoints.URLDefault
-	h.API.Endpoints.WebsocketURL = hitbtcWebsocketAddress
+	h.API.Endpoints = h.NewEndpoints()
+	err = h.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      apiURL,
+		exchange.WebsocketSpot: hitbtcWebsocketAddress,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	h.Websocket = stream.New()
 	h.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
 	h.WebsocketResponseCheckTimeout = exchange.DefaultWebsocketResponseCheckTimeout
@@ -152,6 +156,11 @@ func (h *HitBTC) Setup(exch *config.ExchangeConfig) error {
 		return err
 	}
 
+	wsRunningURL, err := h.API.Endpoints.GetURL(exchange.WebsocketSpot)
+	if err != nil {
+		return err
+	}
+
 	err = h.Websocket.Setup(&stream.WebsocketSetup{
 		Enabled:                          exch.Features.Enabled.Websocket,
 		Verbose:                          exch.Verbose,
@@ -159,14 +168,14 @@ func (h *HitBTC) Setup(exch *config.ExchangeConfig) error {
 		WebsocketTimeout:                 exch.WebsocketTrafficTimeout,
 		DefaultURL:                       hitbtcWebsocketAddress,
 		ExchangeName:                     exch.Name,
-		RunningURL:                       exch.API.Endpoints.WebsocketURL,
+		RunningURL:                       wsRunningURL,
 		Connector:                        h.WsConnect,
 		Subscriber:                       h.Subscribe,
 		UnSubscriber:                     h.Unsubscribe,
 		GenerateSubscriptions:            h.GenerateDefaultSubscriptions,
 		Features:                         &h.Features.Supports.WebsocketCapabilities,
-		OrderbookBufferLimit:             exch.WebsocketOrderbookBufferLimit,
-		BufferEnabled:                    true,
+		OrderbookBufferLimit:             exch.OrderbookConfig.WebsocketBufferLimit,
+		BufferEnabled:                    exch.OrderbookConfig.WebsocketBufferEnabled,
 		SortBuffer:                       true,
 		SortBufferByUpdateIDs:            true,
 	})
@@ -366,46 +375,45 @@ func (h *HitBTC) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (h *HitBTC) UpdateOrderbook(c currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
+	book := &orderbook.Base{
+		Exchange:        h.Name,
+		Pair:            c,
+		Asset:           assetType,
+		VerifyOrderbook: h.CanVerifyOrderbook,
+	}
 	fpair, err := h.FormatExchangeCurrency(c, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	orderbookNew, err := h.GetOrderbook(fpair.String(), 1000)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
-	orderBook := new(orderbook.Base)
 	for x := range orderbookNew.Bids {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{
+		book.Bids = append(book.Bids, orderbook.Item{
 			Amount: orderbookNew.Bids[x].Amount,
 			Price:  orderbookNew.Bids[x].Price,
 		})
 	}
 
 	for x := range orderbookNew.Asks {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{
+		book.Asks = append(book.Asks, orderbook.Item{
 			Amount: orderbookNew.Asks[x].Amount,
 			Price:  orderbookNew.Asks[x].Price,
 		})
 	}
-
-	orderBook.Pair = c
-	orderBook.ExchangeName = h.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(h.Name, c, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // HitBTC exchange
-func (h *HitBTC) UpdateAccountInfo() (account.Holdings, error) {
+func (h *HitBTC) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var response account.Holdings
 	response.Exchange = h.Name
 	accountBalance, err := h.GetBalances()
@@ -435,10 +443,10 @@ func (h *HitBTC) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (h *HitBTC) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(h.Name)
+func (h *HitBTC) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(h.Name, assetType)
 	if err != nil {
-		return h.UpdateAccountInfo()
+		return h.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -711,7 +719,7 @@ func (h *HitBTC) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, e
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -761,7 +769,7 @@ func (h *HitBTC) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, e
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -773,8 +781,8 @@ func (h *HitBTC) AuthenticateWebsocket() error {
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (h *HitBTC) ValidateCredentials() error {
-	_, err := h.UpdateAccountInfo()
+func (h *HitBTC) ValidateCredentials(assetType asset.Item) error {
+	_, err := h.UpdateAccountInfo(assetType)
 	return h.CheckTransientError(err)
 }
 
@@ -844,17 +852,18 @@ func (h *HitBTC) GetHistoricCandlesExtended(pair currency.Pair, a asset.Item, st
 		Interval: interval,
 	}
 
-	dates := kline.CalcDateRanges(start, end, interval, h.Features.Enabled.Kline.ResultLimit)
+	dates := kline.CalculateCandleDateRanges(start, end, interval, h.Features.Enabled.Kline.ResultLimit)
 	formattedPair, err := h.FormatExchangeCurrency(pair, a)
 	if err != nil {
 		return kline.Item{}, err
 	}
 
-	for y := range dates {
-		data, err := h.GetCandles(formattedPair.String(),
+	for y := range dates.Ranges {
+		var data []ChartData
+		data, err = h.GetCandles(formattedPair.String(),
 			strconv.FormatInt(int64(h.Features.Enabled.Kline.ResultLimit), 10),
 			h.FormatExchangeKlineInterval(interval),
-			dates[y].Start, dates[y].End)
+			dates.Ranges[y].Start.Time, dates.Ranges[y].End.Time)
 		if err != nil {
 			return kline.Item{}, err
 		}
@@ -870,7 +879,12 @@ func (h *HitBTC) GetHistoricCandlesExtended(pair currency.Pair, a asset.Item, st
 			})
 		}
 	}
-
+	err = dates.VerifyResultsHaveData(ret.Candles)
+	if err != nil {
+		log.Warnf(log.ExchangeSys, "%s - %s", h.Name, err)
+	}
+	ret.RemoveDuplicates()
+	ret.RemoveOutsideRange(start, end)
 	ret.SortCandlesByTimestamp(false)
 	return ret, nil
 }

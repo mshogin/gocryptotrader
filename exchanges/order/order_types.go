@@ -18,7 +18,7 @@ var (
 	ErrAssetNotSet                = errors.New("order asset type is not set")
 	ErrSideIsInvalid              = errors.New("order side is invalid")
 	ErrTypeIsInvalid              = errors.New("order type is invalid")
-	ErrAmountIsInvalid            = errors.New("order amount is invalid")
+	ErrAmountIsInvalid            = errors.New("order amount is equal or less than zero")
 	ErrPriceMustBeSetIfLimitOrder = errors.New("order price must be set if limit order type is desired")
 	ErrOrderIDNotSet              = errors.New("order id or client order id is not set")
 )
@@ -32,9 +32,11 @@ type Submit struct {
 	HiddenOrder       bool
 	FillOrKill        bool
 	PostOnly          bool
-	Leverage          string
+	ReduceOnly        bool
+	Leverage          float64
 	Price             float64
 	Amount            float64
+	StopPrice         float64
 	LimitPriceUpper   float64
 	LimitPriceLower   float64
 	TriggerPrice      float64
@@ -49,6 +51,7 @@ type Submit struct {
 	ClientID          string
 	ClientOrderID     string
 	WalletAddress     string
+	Offset            string
 	Type              Type
 	Side              Side
 	Status            Status
@@ -79,7 +82,7 @@ type Modify struct {
 	HiddenOrder       bool
 	FillOrKill        bool
 	PostOnly          bool
-	Leverage          string
+	Leverage          float64
 	Price             float64
 	Amount            float64
 	LimitPriceUpper   float64
@@ -119,7 +122,7 @@ type Detail struct {
 	HiddenOrder       bool
 	FillOrKill        bool
 	PostOnly          bool
-	Leverage          string
+	Leverage          float64
 	Price             float64
 	Amount            float64
 	LimitPriceUpper   float64
@@ -167,6 +170,7 @@ type Cancel struct {
 	AssetType     asset.Item
 	Date          time.Time
 	Pair          currency.Pair
+	Symbol        string
 	Trades        []TradeHistory
 }
 
@@ -201,14 +205,14 @@ type TradeHistory struct {
 
 // GetOrdersRequest used for GetOrderHistory and GetOpenOrders wrapper functions
 type GetOrdersRequest struct {
-	Type       Type
-	Side       Side
-	StartTicks time.Time
-	EndTicks   time.Time
-	OrderID    string
+	Type      Type
+	Side      Side
+	StartTime time.Time
+	EndTime   time.Time
+	OrderID   string
 	// Currencies Empty array = all currencies. Some endpoints only support
 	// singular currency enquiries
-	Pairs     []currency.Pair
+	Pairs     currency.Pairs
 	AssetType asset.Item
 }
 
@@ -232,7 +236,9 @@ const (
 	Hidden              Status = "HIDDEN"
 	UnknownStatus       Status = "UNKNOWN"
 	Open                Status = "OPEN"
+	AutoDeleverage      Status = "ADL"
 	Closed              Status = "CLOSED"
+	Pending             Status = "PENDING"
 )
 
 // Type enforces a standard for order types across the code base
@@ -247,10 +253,15 @@ const (
 	ImmediateOrCancel Type = "IMMEDIATE_OR_CANCEL"
 	Stop              Type = "STOP"
 	StopLimit         Type = "STOP LIMIT"
+	StopMarket        Type = "STOP MARKET"
+	TakeProfit        Type = "TAKE PROFIT"
+	TakeProfitMarket  Type = "TAKE PROFIT MARKET"
 	TrailingStop      Type = "TRAILING_STOP"
 	FillOrKill        Type = "FOK"
 	IOS               Type = "IOS"
 	UnknownType       Type = "UNKNOWN"
+	Liquidation       Type = "LIQUIDATION"
+	Trigger           Type = "TRIGGER"
 )
 
 // Side enforces a standard for order sides across the code base

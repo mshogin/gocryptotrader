@@ -26,7 +26,7 @@ type IBotExchange interface {
 	GetName() string
 	IsEnabled() bool
 	SetEnabled(bool)
-	ValidateCredentials() error
+	ValidateCredentials(a asset.Item) error
 	FetchTicker(p currency.Pair, a asset.Item) (*ticker.Price, error)
 	UpdateTicker(p currency.Pair, a asset.Item) (*ticker.Price, error)
 	FetchOrderbook(p currency.Pair, a asset.Item) (*orderbook.Base, error)
@@ -35,8 +35,8 @@ type IBotExchange interface {
 	UpdateTradablePairs(forceUpdate bool) error
 	GetEnabledPairs(a asset.Item) (currency.Pairs, error)
 	GetAvailablePairs(a asset.Item) (currency.Pairs, error)
-	FetchAccountInfo() (account.Holdings, error)
-	UpdateAccountInfo() (account.Holdings, error)
+	FetchAccountInfo(a asset.Item) (account.Holdings, error)
+	UpdateAccountInfo(a asset.Item) (account.Holdings, error)
 	GetAuthenticatedAPISupport(endpoint uint8) bool
 	SetPairs(pairs currency.Pairs, a asset.Item, enabled bool) error
 	GetAssetTypes() asset.Items
@@ -75,7 +75,6 @@ type IBotExchange interface {
 	GetHistoricCandlesExtended(p currency.Pair, a asset.Item, timeStart, timeEnd time.Time, interval kline.Interval) (kline.Item, error)
 	DisableRateLimiter() error
 	EnableRateLimiter() error
-
 	// Websocket specific wrapper functionality
 	// GetWebsocket returns a pointer to the websocket
 	GetWebsocket() (*stream.Websocket, error)
@@ -83,8 +82,13 @@ type IBotExchange interface {
 	SupportsWebsocket() bool
 	SubscribeToWebsocketChannels(channels []stream.ChannelSubscription) error
 	UnsubscribeToWebsocketChannels(channels []stream.ChannelSubscription) error
+	IsAssetWebsocketSupported(aType asset.Item) bool
 	// FlushWebsocketChannels checks and flushes subscriptions if there is a
 	// pair,asset, url/proxy or subscription change
 	FlushWebsocketChannels() error
 	AuthenticateWebsocket() error
+	// Exchange order related execution limits
+	GetOrderExecutionLimits(a asset.Item, cp currency.Pair) (*order.Limits, error)
+	CheckOrderExecutionLimits(a asset.Item, cp currency.Pair, price, amount float64, orderType order.Type) error
+	UpdateOrderExecutionLimits(a asset.Item) error
 }

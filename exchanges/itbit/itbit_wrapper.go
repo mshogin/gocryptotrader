@@ -94,9 +94,13 @@ func (i *ItBit) SetDefaults() {
 
 	i.Requester = request.New(i.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout))
-
-	i.API.Endpoints.URLDefault = itbitAPIURL
-	i.API.Endpoints.URL = i.API.Endpoints.URLDefault
+	i.API.Endpoints = i.NewEndpoints()
+	err = i.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot: itbitAPIURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup sets the exchange parameters from exchange config
@@ -186,9 +190,16 @@ func (i *ItBit) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderboo
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (i *ItBit) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
+	book := &orderbook.Base{
+		Exchange:         i.Name,
+		Pair:             p,
+		Asset:            assetType,
+		PriceDuplication: true,
+		VerifyOrderbook:  i.CanVerifyOrderbook,
+	}
 	fpair, err := i.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	orderbookNew, err := i.GetOrderbook(fpair.String())
@@ -196,18 +207,17 @@ func (i *ItBit) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 		return nil, err
 	}
 
-	orderBook := new(orderbook.Base)
 	for x := range orderbookNew.Bids {
 		var price, amount float64
 		price, err = strconv.ParseFloat(orderbookNew.Bids[x][0], 64)
 		if err != nil {
-			return orderBook, err
+			return book, err
 		}
 		amount, err = strconv.ParseFloat(orderbookNew.Bids[x][1], 64)
 		if err != nil {
-			return orderBook, err
+			return book, err
 		}
-		orderBook.Bids = append(orderBook.Bids,
+		book.Bids = append(book.Bids,
 			orderbook.Item{
 				Amount: amount,
 				Price:  price,
@@ -218,33 +228,27 @@ func (i *ItBit) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 		var price, amount float64
 		price, err = strconv.ParseFloat(orderbookNew.Asks[x][0], 64)
 		if err != nil {
-			return orderBook, err
+			return book, err
 		}
 		amount, err = strconv.ParseFloat(orderbookNew.Asks[x][1], 64)
 		if err != nil {
-			return orderBook, err
+			return book, err
 		}
-		orderBook.Asks = append(orderBook.Asks,
+		book.Asks = append(book.Asks,
 			orderbook.Item{
 				Amount: amount,
 				Price:  price,
 			})
 	}
-
-	orderBook.Pair = p
-	orderBook.ExchangeName = i.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(i.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies
-func (i *ItBit) UpdateAccountInfo() (account.Holdings, error) {
+func (i *ItBit) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var info account.Holdings
 	info.Exchange = i.Name
 
@@ -293,10 +297,10 @@ func (i *ItBit) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (i *ItBit) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(i.Name)
+func (i *ItBit) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(i.Name, assetType)
 	if err != nil {
-		return i.UpdateAccountInfo()
+		return i.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -549,7 +553,7 @@ func (i *ItBit) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, er
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
 	return orders, nil
@@ -617,7 +621,7 @@ func (i *ItBit) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, er
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	order.FilterOrdersByCurrencies(&orders, req.Pairs)
 	return orders, nil
@@ -625,8 +629,8 @@ func (i *ItBit) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, er
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (i *ItBit) ValidateCredentials() error {
-	_, err := i.UpdateAccountInfo()
+func (i *ItBit) ValidateCredentials(assetType asset.Item) error {
+	_, err := i.UpdateAccountInfo(assetType)
 	return i.CheckTransientError(err)
 }
 

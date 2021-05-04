@@ -788,6 +788,12 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "asset_type",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -824,6 +830,12 @@
         "parameters": [
           {
             "name": "exchange",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "asset_type",
             "in": "query",
             "required": false,
             "type": "string"
@@ -2252,6 +2264,12 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "asset_type",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -3470,6 +3488,9 @@
         },
         "pair": {
           "$ref": "#/definitions/gctrpcCurrencyPair"
+        },
+        "asset": {
+          "type": "string"
         }
       }
     },
@@ -3509,6 +3530,12 @@
         },
         "pair": {
           "$ref": "#/definitions/gctrpcCurrencyPair"
+        },
+        "start_date": {
+          "type": "string"
+        },
+        "end_date": {
+          "type": "string"
         }
       }
     },

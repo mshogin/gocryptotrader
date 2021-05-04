@@ -127,12 +127,15 @@ func (g *Gateio) SetDefaults() {
 	}
 	g.Requester = request.New(g.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout))
-
-	g.API.Endpoints.URLDefault = gateioTradeURL
-	g.API.Endpoints.URL = g.API.Endpoints.URLDefault
-	g.API.Endpoints.URLSecondaryDefault = gateioMarketURL
-	g.API.Endpoints.URLSecondary = g.API.Endpoints.URLSecondaryDefault
-	g.API.Endpoints.WebsocketURL = gateioWebsocketEndpoint
+	g.API.Endpoints = g.NewEndpoints()
+	err = g.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:              gateioTradeURL,
+		exchange.RestSpotSupplementary: gateioMarketURL,
+		exchange.WebsocketSpot:         gateioWebsocketEndpoint,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	g.Websocket = stream.New()
 	g.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
 	g.WebsocketResponseCheckTimeout = exchange.DefaultWebsocketResponseCheckTimeout
@@ -151,6 +154,11 @@ func (g *Gateio) Setup(exch *config.ExchangeConfig) error {
 		return err
 	}
 
+	wsRunningURL, err := g.API.Endpoints.GetURL(exchange.WebsocketSpot)
+	if err != nil {
+		return err
+	}
+
 	err = g.Websocket.Setup(&stream.WebsocketSetup{
 		Enabled:                          exch.Features.Enabled.Websocket,
 		Verbose:                          exch.Verbose,
@@ -158,13 +166,13 @@ func (g *Gateio) Setup(exch *config.ExchangeConfig) error {
 		WebsocketTimeout:                 exch.WebsocketTrafficTimeout,
 		DefaultURL:                       gateioWebsocketEndpoint,
 		ExchangeName:                     exch.Name,
-		RunningURL:                       exch.API.Endpoints.WebsocketURL,
+		RunningURL:                       wsRunningURL,
 		Connector:                        g.WsConnect,
 		Subscriber:                       g.Subscribe,
 		GenerateSubscriptions:            g.GenerateDefaultSubscriptions,
 		Features:                         &g.Features.Supports.WebsocketCapabilities,
-		OrderbookBufferLimit:             exch.WebsocketOrderbookBufferLimit,
-		BufferEnabled:                    true,
+		OrderbookBufferLimit:             exch.OrderbookConfig.WebsocketBufferLimit,
+		BufferEnabled:                    exch.OrderbookConfig.WebsocketBufferEnabled,
 	})
 	if err != nil {
 		return err
@@ -278,46 +286,45 @@ func (g *Gateio) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (g *Gateio) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	orderBook := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        g.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: g.CanVerifyOrderbook,
+	}
 	curr, err := g.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 
 	orderbookNew, err := g.GetOrderbook(curr.String())
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for x := range orderbookNew.Bids {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{
+		book.Bids = append(book.Bids, orderbook.Item{
 			Amount: orderbookNew.Bids[x].Amount,
 			Price:  orderbookNew.Bids[x].Price,
 		})
 	}
 
 	for x := range orderbookNew.Asks {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{
+		book.Asks = append(book.Asks, orderbook.Item{
 			Amount: orderbookNew.Asks[x].Amount,
 			Price:  orderbookNew.Asks[x].Price,
 		})
 	}
-
-	orderBook.Pair = p
-	orderBook.ExchangeName = g.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(g.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // ZB exchange
-func (g *Gateio) UpdateAccountInfo() (account.Holdings, error) {
+func (g *Gateio) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var info account.Holdings
 	var balances []account.Balance
 
@@ -402,10 +409,10 @@ func (g *Gateio) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (g *Gateio) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(g.Name)
+func (g *Gateio) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(g.Name, assetType)
 	if err != nil {
-		return g.UpdateAccountInfo()
+		return g.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -745,7 +752,7 @@ func (g *Gateio) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, e
 			})
 		}
 	}
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -791,7 +798,7 @@ func (g *Gateio) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, e
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -803,8 +810,8 @@ func (g *Gateio) AuthenticateWebsocket() error {
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (g *Gateio) ValidateCredentials() error {
-	_, err := g.UpdateAccountInfo()
+func (g *Gateio) ValidateCredentials(assetType asset.Item) error {
+	_, err := g.UpdateAccountInfo(assetType)
 	return g.CheckTransientError(err)
 }
 

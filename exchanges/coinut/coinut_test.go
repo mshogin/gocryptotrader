@@ -253,7 +253,8 @@ func TestFormatWithdrawPermissions(t *testing.T) {
 
 func TestGetActiveOrders(t *testing.T) {
 	var getOrdersRequest = order.GetOrdersRequest{
-		Type: order.AnyType,
+		Type:      order.AnyType,
+		AssetType: asset.Spot,
 	}
 	_, err := c.GetActiveOrders(&getOrdersRequest)
 	if areTestAPIKeysSet() && err != nil {
@@ -264,7 +265,8 @@ func TestGetActiveOrders(t *testing.T) {
 func TestGetOrderHistoryWrapper(t *testing.T) {
 	setupWSTestAuth(t)
 	var getOrdersRequest = order.GetOrdersRequest{
-		Type: order.AnyType,
+		Type:      order.AnyType,
+		AssetType: asset.Spot,
 		Pairs: []currency.Pair{currency.NewPair(currency.BTC,
 			currency.USD)},
 	}
@@ -358,12 +360,12 @@ func TestCancelAllExchangeOrders(t *testing.T) {
 
 func TestGetAccountInfo(t *testing.T) {
 	if apiKey != "" || clientID != "" {
-		_, err := c.UpdateAccountInfo()
+		_, err := c.UpdateAccountInfo(asset.Spot)
 		if err != nil {
 			t.Error("GetAccountInfo() error", err)
 		}
 	} else {
-		_, err := c.UpdateAccountInfo()
+		_, err := c.UpdateAccountInfo(asset.Spot)
 		if err == nil {
 			t.Error("GetAccountInfo() Expected error")
 		}
@@ -650,9 +652,9 @@ func TestGetNonce(t *testing.T) {
 func TestWsOrderbook(t *testing.T) {
 	pressXToJSON := []byte(`{
   "buy":
-   [ { "count": 7, "price": "750.00000000", "qty": "0.07000000" },
-     { "count": 1, "price": "751.00000000", "qty": "0.01000000" },
-     { "count": 1, "price": "751.34500000", "qty": "0.01000000" } ],
+   [ { "count": 1, "price": "751.34500000", "qty": "0.01000000" },
+   { "count": 1, "price": "751.00000000", "qty": "0.01000000" },
+   { "count": 7, "price": "750.00000000", "qty": "0.07000000" } ],
   "sell":
    [ { "count": 6, "price": "750.58100000", "qty": "0.06000000" },
      { "count": 1, "price": "750.58200000", "qty": "0.01000000" },

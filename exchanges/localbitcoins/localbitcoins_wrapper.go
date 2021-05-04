@@ -93,9 +93,13 @@ func (l *LocalBitcoins) SetDefaults() {
 
 	l.Requester = request.New(l.Name,
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout))
-
-	l.API.Endpoints.URLDefault = localbitcoinsAPIURL
-	l.API.Endpoints.URL = l.API.Endpoints.URLDefault
+	l.API.Endpoints = l.NewEndpoints()
+	err = l.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot: localbitcoinsAPIURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup sets exchange configuration parameters
@@ -213,33 +217,36 @@ func (l *LocalBitcoins) FetchOrderbook(p currency.Pair, assetType asset.Item) (*
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (l *LocalBitcoins) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	orderBook := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        l.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: l.CanVerifyOrderbook,
+	}
+
 	orderbookNew, err := l.GetOrderbook(p.Quote.String())
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for x := range orderbookNew.Bids {
-		orderBook.Bids = append(orderBook.Bids, orderbook.Item{
+		book.Bids = append(book.Bids, orderbook.Item{
 			Amount: orderbookNew.Bids[x].Amount / orderbookNew.Bids[x].Price,
 			Price:  orderbookNew.Bids[x].Price,
 		})
 	}
 
 	for x := range orderbookNew.Asks {
-		orderBook.Asks = append(orderBook.Asks, orderbook.Item{
+		book.Asks = append(book.Asks, orderbook.Item{
 			Amount: orderbookNew.Asks[x].Amount / orderbookNew.Asks[x].Price,
 			Price:  orderbookNew.Asks[x].Price,
 		})
 	}
 
-	orderBook.Pair = p
-	orderBook.ExchangeName = l.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	book.PriceDuplication = true
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	return orderbook.Get(l.Name, p, assetType)
@@ -247,7 +254,7 @@ func (l *LocalBitcoins) UpdateOrderbook(p currency.Pair, assetType asset.Item) (
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // LocalBitcoins exchange
-func (l *LocalBitcoins) UpdateAccountInfo() (account.Holdings, error) {
+func (l *LocalBitcoins) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var response account.Holdings
 	response.Exchange = l.Name
 	accountBalance, err := l.GetWalletBalance()
@@ -271,10 +278,10 @@ func (l *LocalBitcoins) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (l *LocalBitcoins) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(l.Name)
+func (l *LocalBitcoins) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(l.Name, assetType)
 	if err != nil {
-		return l.UpdateAccountInfo()
+		return l.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -546,8 +553,8 @@ func (l *LocalBitcoins) GetActiveOrders(getOrdersRequest *order.GetOrdersRequest
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, getOrdersRequest.StartTicks,
-		getOrdersRequest.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, getOrdersRequest.StartTime,
+		getOrdersRequest.EndTime)
 	order.FilterOrdersBySide(&orders, getOrdersRequest.Side)
 
 	return orders, nil
@@ -632,8 +639,8 @@ func (l *LocalBitcoins) GetOrderHistory(getOrdersRequest *order.GetOrdersRequest
 		})
 	}
 
-	order.FilterOrdersByTickRange(&orders, getOrdersRequest.StartTicks,
-		getOrdersRequest.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, getOrdersRequest.StartTime,
+		getOrdersRequest.EndTime)
 	order.FilterOrdersBySide(&orders, getOrdersRequest.Side)
 
 	return orders, nil
@@ -641,8 +648,8 @@ func (l *LocalBitcoins) GetOrderHistory(getOrdersRequest *order.GetOrdersRequest
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (l *LocalBitcoins) ValidateCredentials() error {
-	_, err := l.UpdateAccountInfo()
+func (l *LocalBitcoins) ValidateCredentials(assetType asset.Item) error {
+	_, err := l.UpdateAccountInfo(assetType)
 	return l.CheckTransientError(err)
 }
 

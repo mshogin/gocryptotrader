@@ -13,6 +13,13 @@ const (
 	orderCancelled = 6
 )
 
+// FundingHistoryData stores funding history data
+type FundingHistoryData struct {
+	Time   int64   `json:"time"`
+	Rate   float64 `json:"rate"`
+	Symbol string  `json:"symbol"`
+}
+
 // MarketSummary response data
 type MarketSummary []struct {
 	Symbol              string   `json:"symbol"`
@@ -351,3 +358,15 @@ type OrderSizeLimit struct {
 
 // orderSizeLimitMap map of OrderSizeLimit per currency
 var orderSizeLimitMap sync.Map
+
+// WsSubscriptionAcknowledgement contains successful subscription messages
+type WsSubscriptionAcknowledgement struct {
+	Channel []string `json:"channel"`
+	Event   string   `json:"event"`
+}
+
+// WsLoginAcknowledgement contains whether authentication was successful
+type WsLoginAcknowledgement struct {
+	Event   string `json:"event"`
+	Success bool   `json:"success"`
+}

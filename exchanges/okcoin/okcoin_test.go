@@ -67,7 +67,6 @@ func TestMain(m *testing.M) {
 	okcoinConfig.API.Credentials.Key = apiKey
 	okcoinConfig.API.Credentials.Secret = apiSecret
 	okcoinConfig.API.Credentials.ClientID = passphrase
-	okcoinConfig.API.Endpoints.WebsocketURL = o.API.Endpoints.WebsocketURL
 	o.Websocket = sharedtestvalues.NewTestWebsocket()
 	err = o.Setup(okcoinConfig)
 	if err != nil {
@@ -860,7 +859,7 @@ func TestOrderBookPartialChecksumCalculator(t *testing.T) {
 
 	calculatedChecksum := o.CalculatePartialOrderbookChecksum(&dataResponse)
 	if calculatedChecksum != dataResponse.Checksum {
-		t.Errorf("Expected %v, Receieved %v", dataResponse.Checksum, calculatedChecksum)
+		t.Errorf("Expected %v, received %v", dataResponse.Checksum, calculatedChecksum)
 	}
 }
 
@@ -1016,7 +1015,7 @@ func TestCancelAllExchangeOrders(t *testing.T) {
 
 // TestGetAccountInfo Wrapper test
 func TestGetAccountInfo(t *testing.T) {
-	_, err := o.UpdateAccountInfo()
+	_, err := o.UpdateAccountInfo(asset.Spot)
 	testStandardErrorHandling(t, err)
 }
 
@@ -1108,7 +1107,7 @@ func TestGetHistoricCandlesExtended(t *testing.T) {
 		t.Fatal(err)
 	}
 	startTime := time.Unix(1588636800, 0)
-	_, err = o.GetHistoricCandlesExtended(currencyPair, asset.Spot, startTime, time.Now(), kline.OneMin)
+	_, err = o.GetHistoricCandlesExtended(currencyPair, asset.Spot, startTime, time.Now(), kline.OneWeek)
 	if err != nil {
 		t.Fatal(err)
 	}

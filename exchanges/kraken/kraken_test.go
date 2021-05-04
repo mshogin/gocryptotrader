@@ -18,6 +18,7 @@ import (
 	"github.com/thrasher-corp/gocryptotrader/exchanges/asset"
 	"github.com/thrasher-corp/gocryptotrader/exchanges/kline"
 	"github.com/thrasher-corp/gocryptotrader/exchanges/order"
+	"github.com/thrasher-corp/gocryptotrader/exchanges/orderbook"
 	"github.com/thrasher-corp/gocryptotrader/exchanges/sharedtestvalues"
 	"github.com/thrasher-corp/gocryptotrader/exchanges/stream"
 	"github.com/thrasher-corp/gocryptotrader/portfolio/withdraw"
@@ -48,7 +49,6 @@ func TestMain(m *testing.M) {
 	krakenConfig.API.AuthenticatedSupport = true
 	krakenConfig.API.Credentials.Key = apiKey
 	krakenConfig.API.Credentials.Secret = apiSecret
-	krakenConfig.API.Endpoints.WebsocketURL = k.API.Endpoints.WebsocketURL
 	k.Websocket = sharedtestvalues.NewTestWebsocket()
 	err = k.Setup(krakenConfig)
 	if err != nil {
@@ -63,6 +63,301 @@ func TestGetServerTime(t *testing.T) {
 	_, err := k.GetServerTime()
 	if err != nil {
 		t.Error("GetServerTime() error", err)
+	}
+}
+
+func TestFetchTradablePairs(t *testing.T) {
+	t.Parallel()
+	_, err := k.FetchTradablePairs(asset.Futures)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpdateTicker(t *testing.T) {
+	t.Parallel()
+	sp, err := currency.NewPairFromString("XBTUSD")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.UpdateTicker(sp, asset.Spot)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fp, err := currency.NewPairFromString("pi_xbtusd")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.UpdateTicker(fp, asset.Futures)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpdateOrderbook(t *testing.T) {
+	t.Parallel()
+	sp, err := currency.NewPairFromString("BTCEUR")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.UpdateOrderbook(sp, asset.Spot)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fp, err := currency.NewPairFromString("pi_xbtusd")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.UpdateOrderbook(fp, asset.Futures)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpdateAccountInfo(t *testing.T) {
+	t.Parallel()
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	_, err := k.UpdateAccountInfo(asset.Spot)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestWrapperGetOrderInfo(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.GetOrderInfo("123", currency.Pair{}, asset.Futures)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesBatchOrder(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	var data []PlaceBatchOrderData
+	var tempData PlaceBatchOrderData
+	tempData.PlaceOrderType = "cancel"
+	tempData.OrderID = "test123"
+	tempData.Symbol = "pi_xbtusd"
+	data = append(data, tempData)
+	_, err := k.FuturesBatchOrder(data)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesEditOrder(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	_, err := k.FuturesEditOrder("test123", "", 5.2, 1, 0)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesSendOrder(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	cp, err := currency.NewPairFromString("PI_XBTUSD")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.FuturesSendOrder(order.Limit, cp, "buy", "", "", "", 1, 1, 0.9)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesCancelOrder(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	_, err := k.FuturesCancelOrder("test123", "")
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesGetFills(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.FuturesGetFills(time.Now().Add(-time.Hour * 24))
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesTransfer(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.FuturesTransfer("cash", "futures", "btc", 2)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesGetOpenPositions(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.FuturesGetOpenPositions()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesNotifications(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.FuturesNotifications()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesCancelAllOrders(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	cp, err := currency.NewPairFromString("PI_XBTUSD")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.FuturesCancelAllOrders(cp)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGetFuturesAccountData(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.GetFuturesAccountData()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesCancelAllOrdersAfter(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	_, err := k.FuturesCancelAllOrdersAfter(50)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesOpenOrders(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.FuturesOpenOrders()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesRecentOrders(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	cp, err := currency.NewPairFromString("PI_XBTUSD")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.FuturesRecentOrders(cp)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesWithdrawToSpotWallet(t *testing.T) {
+	if !areTestAPIKeysSet() || !canManipulateRealOrders {
+		t.Skip("skipping test: api keys not set or canManipulateRealOrders")
+	}
+	t.Parallel()
+	_, err := k.FuturesWithdrawToSpotWallet("xbt", 5)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFuturesGetTransfers(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	t.Parallel()
+	_, err := k.FuturesGetTransfers(time.Now().Add(-time.Hour * 24))
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGetFuturesOrderbook(t *testing.T) {
+	t.Parallel()
+	cp, err := currency.NewPairFromString("FI_xbtusd_200925")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetFuturesOrderbook(cp)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGetFuturesMarkets(t *testing.T) {
+	t.Parallel()
+	_, err := k.GetFuturesMarkets()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGetFuturesTickers(t *testing.T) {
+	t.Parallel()
+	_, err := k.GetFuturesTickers()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGetFuturesTradeHistory(t *testing.T) {
+	t.Parallel()
+	cp, err := currency.NewPairFromString("pi_xbtusd")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetFuturesTradeHistory(cp, time.Now().Add(-time.Hour*24))
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -136,7 +431,19 @@ func TestLookupCurrency(t *testing.T) {
 // TestGetAssetPairs API endpoint test
 func TestGetAssetPairs(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetAssetPairs()
+	_, err := k.GetAssetPairs([]string{}, "fees")
+	if err != nil {
+		t.Error("GetAssetPairs() error", err)
+	}
+	_, err = k.GetAssetPairs([]string{}, "leverage")
+	if err != nil {
+		t.Error("GetAssetPairs() error", err)
+	}
+	_, err = k.GetAssetPairs([]string{}, "margin")
+	if err != nil {
+		t.Error("GetAssetPairs() error", err)
+	}
+	_, err = k.GetAssetPairs([]string{}, "")
 	if err != nil {
 		t.Error("GetAssetPairs() error", err)
 	}
@@ -145,7 +452,11 @@ func TestGetAssetPairs(t *testing.T) {
 // TestGetTicker API endpoint test
 func TestGetTicker(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetTicker("BCHEUR")
+	cp, err := currency.NewPairFromString("BCHEUR")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetTicker(cp)
 	if err != nil {
 		t.Error("GetTicker() error", err)
 	}
@@ -163,7 +474,11 @@ func TestGetTickers(t *testing.T) {
 // TestGetOHLC API endpoint test
 func TestGetOHLC(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetOHLC("XXBTZUSD", "1440")
+	cp, err := currency.NewPairFromString("XXBTZUSD")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetOHLC(cp, "1440")
 	if err != nil {
 		t.Error("GetOHLC() error", err)
 	}
@@ -172,7 +487,11 @@ func TestGetOHLC(t *testing.T) {
 // TestGetDepth API endpoint test
 func TestGetDepth(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetDepth("BCHEUR")
+	cp, err := currency.NewPairFromString("BCHEUR")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetDepth(cp)
 	if err != nil {
 		t.Error("GetDepth() error", err)
 	}
@@ -181,12 +500,19 @@ func TestGetDepth(t *testing.T) {
 // TestGetTrades API endpoint test
 func TestGetTrades(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetTrades("BCHEUR")
+	cp, err := currency.NewPairFromString("BCHEUR")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetTrades(cp)
 	if err != nil {
 		t.Error("GetTrades() error", err)
 	}
-
-	_, err = k.GetTrades("MADEUP")
+	cp2, err := currency.NewPairFromString("MADEUP")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetTrades(cp2)
 	if err == nil {
 		t.Error("expected error")
 	}
@@ -195,7 +521,11 @@ func TestGetTrades(t *testing.T) {
 // TestGetSpread API endpoint test
 func TestGetSpread(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetSpread("BCHEUR")
+	cp, err := currency.NewPairFromString("BCHEUR")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetSpread(cp)
 	if err != nil {
 		t.Error("GetSpread() error", err)
 	}
@@ -300,7 +630,11 @@ func TestQueryLedgers(t *testing.T) {
 // TestGetTradeVolume API endpoint test
 func TestGetTradeVolume(t *testing.T) {
 	t.Parallel()
-	_, err := k.GetTradeVolume(true, "OAVY7T-MV5VK-KHDF5X")
+	cp, err := currency.NewPairFromString("OAVY7T-MV5VK-KHDF5X")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.GetTradeVolume(true, cp)
 	if err == nil {
 		t.Error("GetTradeVolume() Expected error")
 	}
@@ -310,7 +644,11 @@ func TestGetTradeVolume(t *testing.T) {
 func TestAddOrder(t *testing.T) {
 	t.Parallel()
 	args := AddOrderOptions{OrderFlags: "fcib"}
-	_, err := k.AddOrder("XXBTZUSD",
+	cp, err := currency.NewPairFromString("XXBTZUSD")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = k.AddOrder(cp,
 		order.Sell.Lower(), order.Limit.Lower(),
 		0.00000001, 0, 0, 0, &args)
 	if err == nil {
@@ -446,22 +784,31 @@ func TestFormatWithdrawPermissions(t *testing.T) {
 
 // TestGetActiveOrders wrapper test
 func TestGetActiveOrders(t *testing.T) {
+	t.Parallel()
+	if !areTestAPIKeysSet() {
+		t.Skip("skipping test: api keys not set")
+	}
+	pair, err := currency.NewPairFromString("LTC_USDT")
+	if err != nil {
+		t.Error(err)
+	}
 	var getOrdersRequest = order.GetOrdersRequest{
-		Type: order.AnyType,
+		Type:      order.AnyType,
+		AssetType: asset.Spot,
+		Pairs:     currency.Pairs{pair},
 	}
 
-	_, err := k.GetActiveOrders(&getOrdersRequest)
-	if areTestAPIKeysSet() && err != nil {
-		t.Errorf("Could not get open orders: %s", err)
-	} else if !areTestAPIKeysSet() && err == nil {
-		t.Error("Expecting an error when no keys are set")
+	_, err = k.GetActiveOrders(&getOrdersRequest)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
 // TestGetOrderHistory wrapper test
 func TestGetOrderHistory(t *testing.T) {
 	var getOrdersRequest = order.GetOrdersRequest{
-		Type: order.AnyType,
+		Type:      order.AnyType,
+		AssetType: asset.Spot,
 	}
 
 	_, err := k.GetOrderHistory(&getOrdersRequest)
@@ -593,15 +940,27 @@ func TestCancelAllExchangeOrders(t *testing.T) {
 // TestGetAccountInfo wrapper test
 func TestGetAccountInfo(t *testing.T) {
 	if areTestAPIKeysSet() {
-		_, err := k.UpdateAccountInfo()
+		_, err := k.UpdateAccountInfo(asset.Spot)
 		if err != nil {
+			// Spot and Futures have separate api keys. Please ensure that the correct one is provided
 			t.Error("GetAccountInfo() error", err)
 		}
 	} else {
-		_, err := k.UpdateAccountInfo()
+		_, err := k.UpdateAccountInfo(asset.Spot)
 		if err == nil {
 			t.Error("GetAccountInfo() Expected error")
 		}
+	}
+}
+
+func TestUpdateFuturesAccountInfo(t *testing.T) {
+	if !areTestAPIKeysSet() {
+		t.Skip("API keys not set. Skipping the test")
+	}
+	_, err := k.UpdateAccountInfo(asset.Futures)
+	if err != nil {
+		// Spot and Futures have separate api keys. Please ensure that the correct one is provided
+		t.Error(err)
 	}
 }
 
@@ -619,6 +978,7 @@ func TestModifyOrder(t *testing.T) {
 // TestWithdraw wrapper test
 func TestWithdraw(t *testing.T) {
 	withdrawCryptoRequest := withdraw.Request{
+		Exchange: k.Name,
 		Crypto: withdraw.CryptoRequest{
 			Address: core.BitcoinDonationAddress,
 		},
@@ -1084,7 +1444,7 @@ func TestWsOrdrbook(t *testing.T) {
   "channelID": 13333337,
   "channelName": "book",
   "event": "subscriptionStatus",
-  "pair": "XBT/EUR",
+  "pair": "XBT/USD",
   "status": "subscribed",
   "subscription": {
     "name": "book"
@@ -1112,7 +1472,42 @@ func TestWsOrdrbook(t *testing.T) {
         "5542.70000",
         "0.64700000",
         "1534614244.654432"
-      ]
+	  ],
+	  [
+        "5544.30000",
+        "2.50700000",
+        "1534614248.123678"
+      ],
+      [
+        "5545.80000",
+        "0.33000000",
+        "1534614098.345543"
+      ],
+      [
+        "5546.70000",
+        "0.64700000",
+        "1534614244.654432"
+	  ],
+	  [
+        "5547.70000",
+        "0.64700000",
+        "1534614244.654432"
+	  ],
+	  [
+        "5548.30000",
+        "2.50700000",
+        "1534614248.123678"
+      ],
+      [
+        "5549.80000",
+        "0.33000000",
+        "1534614098.345543"
+      ],
+      [
+        "5550.70000",
+        "0.64700000",
+        "1534614244.654432"
+	  ]
     ],
     "bs": [
       [
@@ -1129,7 +1524,42 @@ func TestWsOrdrbook(t *testing.T) {
         "5539.50000",
         "5.00000000",
         "1534613831.243486"
-      ]
+	  ],
+	  [
+        "5538.20000",
+        "1.52900000",
+        "1534614248.765567"
+      ],
+      [
+        "5537.90000",
+        "0.30000000",
+        "1534614241.769870"
+      ],
+      [
+        "5536.50000",
+        "5.00000000",
+        "1534613831.243486"
+	  ],
+	  [
+        "5535.20000",
+        "1.52900000",
+        "1534614248.765567"
+      ],
+      [
+        "5534.90000",
+        "0.30000000",
+        "1534614241.769870"
+      ],
+      [
+        "5533.50000",
+        "5.00000000",
+        "1534613831.243486"
+	  ],
+	  [
+        "5532.50000",
+        "5.00000000",
+        "1534613831.243486"
+	  ]
     ]
   },
   "book-100",
@@ -1153,7 +1583,8 @@ func TestWsOrdrbook(t *testing.T) {
         "0.40100000",
         "1534614248.456738"
       ]
-    ]
+	],
+	"c": "4187525586"
   },
   "book-10",
   "XBT/USD"
@@ -1171,7 +1602,8 @@ func TestWsOrdrbook(t *testing.T) {
         "0.00000000",
         "1534614335.345903"
       ]
-    ]
+	],
+	"c": "4187525586"
   },
   "book-10",
   "XBT/USD"
@@ -1262,7 +1694,7 @@ func TestWsOpenOrders(t *testing.T) {
         "cost": "0.00000",
         "descr": {
           "close": "",
-          "leverage": "0:1",
+          "leverage": "0.1",
           "order": "sell 10.00345345 XBT/USD @ limit 34.50000 with 0:1 leverage",
           "ordertype": "limit",
           "pair": "XBT/USD",
@@ -1291,7 +1723,7 @@ func TestWsOpenOrders(t *testing.T) {
         "cost": "0.00000",
         "descr": {
           "close": "",
-          "leverage": "0:1",
+          "leverage": "0.1",
           "order": "sell 0.00000010 XBT/USD @ limit 5334.60000 with 0:1 leverage",
           "ordertype": "limit",
           "pair": "XBT/USD",
@@ -1320,7 +1752,7 @@ func TestWsOpenOrders(t *testing.T) {
         "cost": "0.00000",
         "descr": {
           "close": "",
-          "leverage": "0:1",
+          "leverage": "0.1",
           "order": "sell 0.00001000 XBT/USD @ limit 90.40000 with 0:1 leverage",
           "ordertype": "limit",
           "pair": "XBT/USD",
@@ -1349,7 +1781,7 @@ func TestWsOpenOrders(t *testing.T) {
         "cost": "0.00000",
         "descr": {
           "close": "",
-          "leverage": "0:1",
+          "leverage": "0.1",
           "order": "sell 0.00001000 XBT/USD @ limit 9.00000 with 0:1 leverage",
           "ordertype": "limit",
           "pair": "XBT/USD",
@@ -1527,5 +1959,51 @@ func TestGetHistoricTrades(t *testing.T) {
 	_, err = k.GetHistoricTrades(currencyPair, asset.Spot, time.Now().Add(-time.Minute*15), time.Now())
 	if err != nil && err != common.ErrFunctionNotSupported {
 		t.Error(err)
+	}
+}
+
+var testOb = orderbook.Base{
+	Asks: []orderbook.Item{
+		{Price: 0.05005, Amount: 0.00000500},
+		{Price: 0.05010, Amount: 0.00000500},
+		{Price: 0.05015, Amount: 0.00000500},
+		{Price: 0.05020, Amount: 0.00000500},
+		{Price: 0.05025, Amount: 0.00000500},
+		{Price: 0.05030, Amount: 0.00000500},
+		{Price: 0.05035, Amount: 0.00000500},
+		{Price: 0.05040, Amount: 0.00000500},
+		{Price: 0.05045, Amount: 0.00000500},
+		{Price: 0.05050, Amount: 0.00000500},
+	},
+	Bids: []orderbook.Item{
+		{Price: 0.05000, Amount: 0.00000500},
+		{Price: 0.04995, Amount: 0.00000500},
+		{Price: 0.04990, Amount: 0.00000500},
+		{Price: 0.04980, Amount: 0.00000500},
+		{Price: 0.04975, Amount: 0.00000500},
+		{Price: 0.04970, Amount: 0.00000500},
+		{Price: 0.04965, Amount: 0.00000500},
+		{Price: 0.04960, Amount: 0.00000500},
+		{Price: 0.04955, Amount: 0.00000500},
+		{Price: 0.04950, Amount: 0.00000500},
+	},
+}
+
+const krakenAPIDocChecksum = 974947235
+
+func TestChecksumCalculation(t *testing.T) {
+	expected := "5005"
+	if v := trim("0.05005"); v != expected {
+		t.Fatalf("expected %s but received %s", expected, v)
+	}
+
+	expected = "500"
+	if v := trim("0.00000500"); v != expected {
+		t.Fatalf("expected %s but received %s", expected, v)
+	}
+
+	err := validateCRC32(&testOb, krakenAPIDocChecksum, 5, 8)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

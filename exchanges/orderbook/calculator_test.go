@@ -1,6 +1,7 @@
 package orderbook
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/thrasher-corp/gocryptotrader/currency"
@@ -8,8 +9,8 @@ import (
 
 func testSetup() Base {
 	return Base{
-		ExchangeName: "a",
-		Pair:         currency.NewPair(currency.BTC, currency.USD),
+		Exchange: "a",
+		Pair:     currency.NewPair(currency.BTC, currency.USD),
 		Asks: []Item{
 			{Price: 7000, Amount: 1},
 			{Price: 7001, Amount: 2},
@@ -25,21 +26,33 @@ func TestWhaleBomb(t *testing.T) {
 	t.Parallel()
 	b := testSetup()
 
-	// invalid price amout
+	// invalid price amount
 	_, err := b.WhaleBomb(-1, true)
 	if err == nil {
 		t.Error("unexpected result")
 	}
 
 	// valid
-	b.WhaleBomb(7001, true)
+	_, err = b.WhaleBomb(7001, true)
+	if !errors.Is(err, nil) {
+		t.Errorf("received '%v', expected '%v'", err, nil)
+	}
 	// invalid
-	b.WhaleBomb(7002, true)
+	_, err = b.WhaleBomb(7002, true)
+	if err == nil {
+		t.Error("unexpected result")
+	}
 
 	// valid
-	b.WhaleBomb(6998, false)
+	_, err = b.WhaleBomb(6998, false)
+	if !errors.Is(err, nil) {
+		t.Errorf("received '%v', expected '%v'", err, nil)
+	}
 	// invalid
-	b.WhaleBomb(6997, false)
+	_, err = b.WhaleBomb(6997, false)
+	if err == nil {
+		t.Error("unexpected result")
+	}
 }
 
 func TestSimulateOrder(t *testing.T) {

@@ -1,14 +1,11 @@
 package okcoin
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/thrasher-corp/gocryptotrader/common"
-	"github.com/thrasher-corp/gocryptotrader/common/convert"
 	"github.com/thrasher-corp/gocryptotrader/config"
 	"github.com/thrasher-corp/gocryptotrader/currency"
 	exchange "github.com/thrasher-corp/gocryptotrader/exchanges"
@@ -137,10 +134,14 @@ func (o *OKCoin) SetDefaults() {
 		// TODO: Specify each individual endpoint rate limits as per docs
 		request.WithLimiter(request.NewBasicRateLimit(okCoinRateInterval, okCoinStandardRequestRate)),
 	)
-
-	o.API.Endpoints.URLDefault = okCoinAPIURL
-	o.API.Endpoints.URL = okCoinAPIURL
-	o.API.Endpoints.WebsocketURL = okCoinWebsocketURL
+	o.API.Endpoints = o.NewEndpoints()
+	err := o.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:      okCoinAPIURL,
+		exchange.WebsocketSpot: okCoinWebsocketURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 	o.APIVersion = okCoinAPIVersion
 	o.Websocket = stream.New()
 	o.WebsocketResponseMaxLimit = exchange.DefaultWebsocketResponseMaxLimit
@@ -316,157 +317,6 @@ func (o *OKCoin) FetchTicker(p currency.Pair, assetType asset.Item) (tickerData 
 		return o.UpdateTicker(p, assetType)
 	}
 	return
-}
-
-// GetHistoricCandles returns candles between a time period for a set time interval
-func (o *OKCoin) GetHistoricCandles(pair currency.Pair, a asset.Item, start, end time.Time, interval kline.Interval) (kline.Item, error) {
-	if err := o.ValidateKline(pair, a, interval); err != nil {
-		return kline.Item{}, err
-	}
-
-	formattedPair, err := o.FormatExchangeCurrency(pair, a)
-	if err != nil {
-		return kline.Item{}, err
-	}
-
-	req := &okgroup.GetMarketDataRequest{
-		Asset:        a,
-		Start:        start.UTC().Format(time.RFC3339),
-		End:          end.UTC().Format(time.RFC3339),
-		Granularity:  o.FormatExchangeKlineInterval(interval),
-		InstrumentID: formattedPair.String(),
-	}
-
-	candles, err := o.GetMarketData(req)
-	if err != nil {
-		return kline.Item{}, err
-	}
-
-	ret := kline.Item{
-		Exchange: o.Name,
-		Pair:     pair,
-		Asset:    a,
-		Interval: interval,
-	}
-
-	for x := range candles {
-		t := candles[x].([]interface{})
-		tempCandle := kline.Candle{}
-		v, ok := t[0].(string)
-		if !ok {
-			return kline.Item{}, errors.New("unexpected value received")
-		}
-		tempCandle.Time, err = time.Parse(time.RFC3339, v)
-		if err != nil {
-			return kline.Item{}, err
-		}
-		tempCandle.Open, err = convert.FloatFromString(t[1])
-		if err != nil {
-			return kline.Item{}, err
-		}
-		tempCandle.High, err = convert.FloatFromString(t[2])
-		if err != nil {
-			return kline.Item{}, err
-		}
-
-		tempCandle.Low, err = convert.FloatFromString(t[3])
-		if err != nil {
-			return kline.Item{}, err
-		}
-
-		tempCandle.Close, err = convert.FloatFromString(t[4])
-		if err != nil {
-			return kline.Item{}, err
-		}
-
-		tempCandle.Volume, err = convert.FloatFromString(t[5])
-		if err != nil {
-			return kline.Item{}, err
-		}
-		ret.Candles = append(ret.Candles, tempCandle)
-	}
-	ret.SortCandlesByTimestamp(false)
-	return ret, nil
-}
-
-// GetHistoricCandlesExtended returns candles between a time period for a set time interval
-func (o *OKCoin) GetHistoricCandlesExtended(pair currency.Pair, a asset.Item, start, end time.Time, interval kline.Interval) (kline.Item, error) {
-	if err := o.ValidateKline(pair, a, interval); err != nil {
-		return kline.Item{}, err
-	}
-
-	ret := kline.Item{
-		Exchange: o.Name,
-		Pair:     pair,
-		Asset:    a,
-		Interval: interval,
-	}
-
-	dates := kline.CalcDateRanges(start, end, interval, o.Features.Enabled.Kline.ResultLimit)
-	formattedPair, err := o.FormatExchangeCurrency(pair, a)
-	if err != nil {
-		return kline.Item{}, err
-	}
-
-	for x := range dates {
-		req := &okgroup.GetMarketDataRequest{
-			Asset:        a,
-			Start:        dates[x].Start.UTC().Format(time.RFC3339),
-			End:          dates[x].End.UTC().Format(time.RFC3339),
-			Granularity:  o.FormatExchangeKlineInterval(interval),
-			InstrumentID: formattedPair.String(),
-		}
-
-		candles, err := o.GetMarketData(req)
-		if err != nil {
-			return kline.Item{}, err
-		}
-
-		for i := range candles {
-			t := candles[i].([]interface{})
-			tempCandle := kline.Candle{}
-			v, ok := t[0].(string)
-			if !ok {
-				return kline.Item{}, errors.New("unexpected value received")
-			}
-			tempCandle.Time, err = time.Parse(time.RFC3339, v)
-			if err != nil {
-				return kline.Item{}, err
-			}
-			tempCandle.Open, err = convert.FloatFromString(t[1])
-			if err != nil {
-				return kline.Item{}, err
-			}
-			tempCandle.High, err = convert.FloatFromString(t[2])
-			if err != nil {
-				return kline.Item{}, err
-			}
-
-			tempCandle.Low, err = convert.FloatFromString(t[3])
-			if err != nil {
-				return kline.Item{}, err
-			}
-
-			tempCandle.Close, err = convert.FloatFromString(t[4])
-			if err != nil {
-				return kline.Item{}, err
-			}
-
-			tempCandle.Volume, err = convert.FloatFromString(t[5])
-			if err != nil {
-				return kline.Item{}, err
-			}
-			ret.Candles = append(ret.Candles, tempCandle)
-		}
-	}
-
-	ret.SortCandlesByTimestamp(false)
-	return ret, nil
-}
-
-// GetWithdrawalsHistory returns previous withdrawals data
-func (o *OKCoin) GetWithdrawalsHistory(c currency.Code) (resp []exchange.WithdrawalHistory, err error) {
-	return nil, common.ErrNotYetImplemented
 }
 
 // GetRecentTrades returns the most recent trades for a currency and asset

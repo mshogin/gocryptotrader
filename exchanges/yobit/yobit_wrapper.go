@@ -98,11 +98,14 @@ func (y *Yobit) SetDefaults() {
 		common.NewHTTPClientWithTimeout(exchange.DefaultHTTPTimeout),
 		// Server responses are cached every 2 seconds.
 		request.WithLimiter(request.NewBasicRateLimit(time.Second, 1)))
-
-	y.API.Endpoints.URLDefault = apiPublicURL
-	y.API.Endpoints.URL = y.API.Endpoints.URLDefault
-	y.API.Endpoints.URLSecondaryDefault = apiPrivateURL
-	y.API.Endpoints.URLSecondary = y.API.Endpoints.URLSecondaryDefault
+	y.API.Endpoints = y.NewEndpoints()
+	err = y.API.Endpoints.SetDefaultEndpoints(map[exchange.URL]string{
+		exchange.RestSpot:              apiPublicURL,
+		exchange.RestSpotSupplementary: apiPrivateURL,
+	})
+	if err != nil {
+		log.Errorln(log.ExchangeSys, err)
+	}
 }
 
 // Setup sets exchange configuration parameters for Yobit
@@ -236,18 +239,23 @@ func (y *Yobit) FetchOrderbook(p currency.Pair, assetType asset.Item) (*orderboo
 
 // UpdateOrderbook updates and returns the orderbook for a currency pair
 func (y *Yobit) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbook.Base, error) {
-	orderBook := new(orderbook.Base)
+	book := &orderbook.Base{
+		Exchange:        y.Name,
+		Pair:            p,
+		Asset:           assetType,
+		VerifyOrderbook: y.CanVerifyOrderbook,
+	}
 	fpair, err := y.FormatExchangeCurrency(p, assetType)
 	if err != nil {
-		return nil, err
+		return book, err
 	}
 	orderbookNew, err := y.GetDepth(fpair.String())
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
 
 	for i := range orderbookNew.Bids {
-		orderBook.Bids = append(orderBook.Bids,
+		book.Bids = append(book.Bids,
 			orderbook.Item{
 				Price:  orderbookNew.Bids[i][0],
 				Amount: orderbookNew.Bids[i][1],
@@ -255,28 +263,22 @@ func (y *Yobit) UpdateOrderbook(p currency.Pair, assetType asset.Item) (*orderbo
 	}
 
 	for i := range orderbookNew.Asks {
-		orderBook.Asks = append(orderBook.Asks,
+		book.Asks = append(book.Asks,
 			orderbook.Item{
 				Price:  orderbookNew.Asks[i][0],
 				Amount: orderbookNew.Asks[i][1],
 			})
 	}
-
-	orderBook.Pair = p
-	orderBook.ExchangeName = y.Name
-	orderBook.AssetType = assetType
-
-	err = orderBook.Process()
+	err = book.Process()
 	if err != nil {
-		return orderBook, err
+		return book, err
 	}
-
 	return orderbook.Get(y.Name, p, assetType)
 }
 
 // UpdateAccountInfo retrieves balances for all enabled currencies for the
 // Yobit exchange
-func (y *Yobit) UpdateAccountInfo() (account.Holdings, error) {
+func (y *Yobit) UpdateAccountInfo(assetType asset.Item) (account.Holdings, error) {
 	var response account.Holdings
 	response.Exchange = y.Name
 	accountBalance, err := y.GetAccountInformation()
@@ -312,10 +314,10 @@ func (y *Yobit) UpdateAccountInfo() (account.Holdings, error) {
 }
 
 // FetchAccountInfo retrieves balances for all enabled currencies
-func (y *Yobit) FetchAccountInfo() (account.Holdings, error) {
-	acc, err := account.GetHoldings(y.Name)
+func (y *Yobit) FetchAccountInfo(assetType asset.Item) (account.Holdings, error) {
+	acc, err := account.GetHoldings(y.Name, assetType)
 	if err != nil {
-		return y.UpdateAccountInfo()
+		return y.UpdateAccountInfo(assetType)
 	}
 
 	return acc, nil
@@ -575,7 +577,7 @@ func (y *Yobit) GetActiveOrders(req *order.GetOrdersRequest) ([]order.Detail, er
 		}
 	}
 
-	order.FilterOrdersByTickRange(&orders, req.StartTicks, req.EndTicks)
+	order.FilterOrdersByTimeRange(&orders, req.StartTime, req.EndTime)
 	order.FilterOrdersBySide(&orders, req.Side)
 	return orders, nil
 }
@@ -596,8 +598,8 @@ func (y *Yobit) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, er
 		resp, err := y.GetTradeHistory(0,
 			10000,
 			math.MaxInt64,
-			req.StartTicks.Unix(),
-			req.EndTicks.Unix(),
+			req.StartTime.Unix(),
+			req.EndTime.Unix(),
 			"DESC",
 			fpair.String())
 		if err != nil {
@@ -641,8 +643,8 @@ func (y *Yobit) GetOrderHistory(req *order.GetOrdersRequest) ([]order.Detail, er
 
 // ValidateCredentials validates current credentials used for wrapper
 // functionality
-func (y *Yobit) ValidateCredentials() error {
-	_, err := y.UpdateAccountInfo()
+func (y *Yobit) ValidateCredentials(assetType asset.Item) error {
+	_, err := y.UpdateAccountInfo(assetType)
 	return y.CheckTransientError(err)
 }
 
