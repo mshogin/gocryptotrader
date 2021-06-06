@@ -11,7 +11,8 @@ StandardError=journal
 Nice=-5
 Restart=on-failure
 RestartSec=2
-ExecStart=/usr/bin/gocryptotrader
+Environment="GCT_ARGS=%I"
+ExecStart=/usr/bin/gocryptotrader $GCT_ARGS
 ExecReload=/bin/kill -HUP $MAINPID
 LimitNOFILE=1000000
 LimitCORE=infinity
