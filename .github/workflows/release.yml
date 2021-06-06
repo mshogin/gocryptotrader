@@ -15,6 +15,9 @@ jobs:
       - name: Build deb package
         run: dpkg-buildpackage -us -uc -b
 
+      - name: ll
+        run: ls -la .; ls -la ../;
+
       - name: Get tag
         id: get_tag
         run: echo ::set-output name=TAG::${GITHUB_REF#refs/tags/}
